@@ -31,14 +31,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 ?>
 
-<h2>Edit Item</h2>
 <h2 class="mb-4">Edit Inventory Item</h2>
 
-<form method="POST">
-    <input name="item_name" value="<?= $item['item_name'] ?>" required><br><br>
-    <input type="number" name="quantity" value="<?= $item['quantity'] ?>" required><br><br>
-    <button>Update</button>
-</form>
 <div class="row">
     <div class="col-md-6">
         <div class="card shadow-sm">

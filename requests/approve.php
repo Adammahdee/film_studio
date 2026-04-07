@@ -6,6 +6,8 @@ if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
 
+require_once __DIR__ . "/../includes/header.php";
+
 if (isset($_GET['action']) && isset($_GET['id'])) {
 
     $id = $_GET['id'];
@@ -40,7 +42,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                      ->execute([$id]);
 
             } else {
-                echo "Not enough stock<br>";
+                echo '<div class="alert alert-danger">Not enough stock</div>';
             }
 
         } elseif ($action == "reject") {
@@ -60,36 +62,54 @@ $stmt = $conn->query("SELECT r.*, u.full_name, i.item_name
 $requests = $stmt->fetchAll();
 ?>
 
-<h2>Approval System</h2>
+<h2 class="mb-4">Approval System</h2>
 
-<table border="1">
-<tr>
-    <th>ID</th>
-    <th>User</th>
-    <th>Item</th>
-    <th>Qty</th>
-    <th>Status</th>
-    <th>Action</th>
-</tr>
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($requests as $r): ?>
+                <tr>
+                    <td><?= $r['request_id'] ?></td>
+                    <td><?= $r['full_name'] ?></td>
+                    <td><?= $r['item_name'] ?></td>
+                    <td><?= $r['quantity'] ?></td>
+                    <td>
+                        <?php
+                            $badge = 'bg-secondary';
+                            if($r['status'] == 'PENDING') $badge = 'bg-warning text-dark';
+                            if($r['status'] == 'APPROVED') $badge = 'bg-success';
+                            if($r['status'] == 'REJECTED') $badge = 'bg-danger';
+                        ?>
+                        <span class="badge <?= $badge ?>"><?= $r['status'] ?></span>
+                    </td>
+                    <td>
+                        <?php if ($r['status'] == 'PENDING'): ?>
+                            <a href="?action=approve&id=<?= $r['request_id'] ?>" class="btn btn-success btn-sm">Approve</a>
+                            <a href="?action=reject&id=<?= $r['request_id'] ?>" class="btn btn-danger btn-sm">Reject</a>
+                        <?php else: ?>
+                            <span class="text-muted">Done</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 
-<?php foreach ($requests as $r): ?>
-<tr>
-    <td><?= $r['request_id'] ?></td>
-    <td><?= $r['full_name'] ?></td>
-    <td><?= $r['item_name'] ?></td>
-    <td><?= $r['quantity'] ?></td>
-    <td><?= $r['status'] ?></td>
-    <td>
-        <?php if ($r['status'] == 'PENDING'): ?>
-            <a href="?action=approve&id=<?= $r['request_id'] ?>">Approve</a> |
-            <a href="?action=reject&id=<?= $r['request_id'] ?>">Reject</a>
-        <?php else: ?>
-            Done
-        <?php endif; ?>
-    </td>
-</tr>
-<?php endforeach; ?>
-</table>
+<div class="mt-3">
+    <a href="/film_studio/index.php" class="btn btn-secondary">Back</a>
+</div>
 
-<br>
-<a href="/film_studio/index.php">Back</a>
+<?php require_once __DIR__ . "/../includes/footer.php"; ?>

@@ -40,7 +40,28 @@ require_once __DIR__ . "/auth_check.php";
           </a>
           <ul class="dropdown-menu" aria-labelledby="suppliersDropdown">
             <li><a class="dropdown-item" href="/film_studio/suppliers/index.php">Manage Suppliers</a></li>
+          </ul>
+        </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="procurementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Procurement
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="procurementDropdown">
             <li><a class="dropdown-item" href="/film_studio/purchase_orders/index.php">Purchase Orders</a></li>
+            <li><a class="dropdown-item" href="/film_studio/purchase_orders/create.php">Create Purchase Order</a></li>
+            <li><a class="dropdown-item" href="/film_studio/requests/approve.php">Approve Requests</a></li>
+            <li><a class="dropdown-item" href="/film_studio/requests/index.php">View All Requests</a></li>
+          </ul>
+        </li>
+        <?php endif; ?>
+        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'STAFF'): ?>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Requests
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="requestsDropdown">
+            <li><a class="dropdown-item" href="/film_studio/requests/create.php">Create Request</a></li>
+            <li><a class="dropdown-item" href="/film_studio/requests/my_requests.php">My Requests</a></li>
           </ul>
         </li>
         <?php endif; ?>

@@ -35,7 +35,8 @@ try {
     while ($item = $itemsStmt->fetch(PDO::FETCH_ASSOC)) {
         $updateStmt = $conn->prepare("
             UPDATE inventory
-            SET quantity = quantity + ?
+            SET quantity = quantity + ?,
+                status = 'AVAILABLE'
             WHERE item_id = ?
         ");
         $updateStmt->execute([

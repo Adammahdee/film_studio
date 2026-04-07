@@ -20,7 +20,10 @@ $orders = $conn->query("
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Purchase Orders</h2>
-    <a href="create.php" class="btn btn-primary">Create Purchase Order</a>
+    <div class="d-flex gap-2">
+        <a href="create.php" class="btn btn-primary">Create Purchase Order</a>
+        <a href="create.php" class="btn btn-outline-success">Record Purchase</a>
+    </div>
 </div>
 
 <div class="card shadow-sm">
@@ -54,7 +57,7 @@ $orders = $conn->query("
                     <td>
                         <a href="view.php?id=<?= $o['po_id'] ?>" class="btn btn-info btn-sm">View</a>
                         <?php if (($o['status'] ?? '') == 'PENDING'): ?>
-                            <a href="receive.php?id=<?= $o['po_id'] ?>" class="btn btn-success btn-sm">Receive</a>
+                            <a href="receive.php?id=<?= $o['po_id'] ?>" class="btn btn-success btn-sm">Record Purchase</a>
                         <?php endif; ?>
                     </td>
                 </tr>

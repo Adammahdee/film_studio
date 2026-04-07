@@ -29,9 +29,9 @@ require_once __DIR__ . "/includes/header.php";
         <div class="col-md-6">
             <div class="card h-100 shadow-sm">
                 <div class="card-body text-center">
-                    <h5 class="card-title">Purchase Orders</h5>
-                    <p class="card-text">Order stock and receive items.</p>
-                    <a href="/film_studio/purchase_orders/index.php" class="btn btn-primary">View Orders</a>
+                    <h5 class="card-title">Treasurer / Logistics / Inventory</h5>
+                    <p class="card-text">Create purchase orders and record purchases for stock replenishment.</p>
+                    <a href="/film_studio/purchase_orders/index.php" class="btn btn-primary">Manage Purchase Orders</a>
                 </div>
             </div>
         </div>
@@ -50,9 +50,10 @@ require_once __DIR__ . "/includes/header.php";
         <div class="col-md-6">
             <div class="card h-100 shadow-sm">
                 <div class="card-body text-center">
-                    <h5 class="card-title">New Request</h5>
-                    <p class="card-text">Request equipment or items from inventory.</p>
-                    <a href="/film_studio/requests/create.php" class="btn btn-success">Request Item</a>
+                    <h5 class="card-title">Member / Requester</h5>
+                    <p class="card-text">Create requests for equipment or inventory items.</p>
+                    <a href="/film_studio/requests/create.php" class="btn btn-success">Create Request</a>
+                    <a href="/film_studio/requests/my_requests.php" class="btn btn-outline-primary mt-2">My Requests</a>
                 </div>
             </div>
         </div>

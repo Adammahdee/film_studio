@@ -19,6 +19,9 @@ $items = $conn->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAl
 
 <div class="card shadow-sm">
     <div class="card-body">
+        <?php if (!empty($_GET['error'])): ?>
+            <div class="alert alert-danger"><?= htmlspecialchars($_GET['error']) ?></div>
+        <?php endif; ?>
         <form method="POST" action="store.php">
             
             <div class="mb-4">
@@ -61,7 +64,10 @@ $items = $conn->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAl
                 </button>
             </div>
 
-            <button type="submit" class="btn btn-success">Create Order</button>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" name="save_mode" value="pending" class="btn btn-success">Create Purchase Order</button>
+                <button type="submit" name="save_mode" value="received" class="btn btn-outline-success">Record Purchase</button>
+            </div>
         </form>
     </div>
 </div>

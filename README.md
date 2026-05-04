@@ -22,3 +22,9 @@ A simple PHP-based inventory and request management system.
 3. Configure database credentials in `config/db.php`
 4. Import `database_SQL`
 5. Run on Laragon or XAMPP
+
+## Pages
+
+- Public landing page: `index.php`
+- Login page: `auth/login.php`
+- Authenticated dashboard: `dashboard.php`

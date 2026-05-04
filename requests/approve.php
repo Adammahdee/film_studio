@@ -109,7 +109,7 @@ $requests = $stmt->fetchAll();
 </div>
 
 <div class="mt-3">
-    <a href="/film_studio/index.php" class="btn btn-secondary">Back</a>
+    <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
 </div>
 
 <?php require_once __DIR__ . "/../includes/footer.php"; ?>

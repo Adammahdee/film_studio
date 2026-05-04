@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $_SESSION['user_id'] = $user['user_id'];
         $_SESSION['role'] = $user['role'];
 
-        header("Location: /film_studio/index.php");
+        header("Location: /film_studio/dashboard.php");
         exit();
     } else {
         echo "Invalid login<br>";

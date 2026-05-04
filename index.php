@@ -1,282 +1,124 @@
 <?php
-require_once __DIR__ . "/includes/auth_check.php";
-require_once __DIR__ . "/config/db.php";
-require_once __DIR__ . "/includes/header.php";
-
-$role = $_SESSION['role'] ?? '';
-$isAdmin = $role === 'ADMIN' || $role === 'MANAGER';
-
-if ($isAdmin) {
-    $stats = [
-        'total_items' => (int) $conn->query("SELECT COUNT(*) FROM inventory")->fetchColumn(),
-        'total_stock' => (int) $conn->query("SELECT COALESCE(SUM(quantity), 0) FROM inventory")->fetchColumn(),
-        'pending_requests' => (int) $conn->query("SELECT COUNT(*) FROM requests WHERE status = 'PENDING'")->fetchColumn(),
-        'pending_orders' => (int) $conn->query("SELECT COUNT(*) FROM purchase_orders WHERE status = 'PENDING'")->fetchColumn(),
-        'suppliers' => (int) $conn->query("SELECT COUNT(*) FROM suppliers")->fetchColumn(),
-        'out_of_stock' => (int) $conn->query("SELECT COUNT(*) FROM inventory WHERE status = 'OUT_OF_STOCK' OR quantity <= 0")->fetchColumn(),
-    ];
-
-    $lowStockStmt = $conn->query("
-        SELECT item_id, item_name, quantity, status
-        FROM inventory
-        WHERE quantity <= 5 OR status = 'OUT_OF_STOCK'
-        ORDER BY quantity ASC, item_name ASC
-        LIMIT 6
-    ");
-    $lowStockItems = $lowStockStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $recentRequestsStmt = $conn->query("
-        SELECT r.request_id, r.quantity, r.status, u.full_name, i.item_name
-        FROM requests r
-        JOIN users u ON r.user_id = u.user_id
-        JOIN inventory i ON r.item_id = i.item_id
-        ORDER BY r.request_id DESC
-        LIMIT 5
-    ");
-    $recentRequests = $recentRequestsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $recentOrdersStmt = $conn->query("
-        SELECT po.*, s.name AS supplier_name,
-               (SELECT COUNT(*) FROM purchase_order_items poi WHERE poi.po_id = po.po_id) AS item_count
-        FROM purchase_orders po
-        JOIN suppliers s ON po.supplier_id = s.supplier_id
-        ORDER BY po.po_id DESC
-        LIMIT 5
-    ");
-    $recentOrders = $recentOrdersStmt->fetchAll(PDO::FETCH_ASSOC);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-function dashboardBadgeClass($status)
-{
-    if ($status === 'PENDING') {
-        return 'bg-warning text-dark';
-    }
-    if ($status === 'APPROVED' || $status === 'RECEIVED' || $status === 'AVAILABLE') {
-        return 'bg-success';
-    }
-    if ($status === 'REJECTED' || $status === 'OUT_OF_STOCK') {
-        return 'bg-danger';
-    }
-    return 'bg-secondary';
-}
+$isLoggedIn = isset($_SESSION['user_id']);
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Film Studio Inventory System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f4f7fb;
+        }
 
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">Dashboard</h2>
-        <p class="text-muted mb-0">Overview of inventory, requests, and purchasing activity.</p>
-    </div>
+        .landing-shell {
+            min-height: 100vh;
+        }
 
-    <?php if ($isAdmin): ?>
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="/film_studio/inventory/add_item.php" class="btn btn-success">Add Item</a>
-            <a href="/film_studio/purchase_orders/create.php" class="btn btn-primary">Create Purchase Order</a>
-            <a href="/film_studio/requests/approve.php" class="btn btn-outline-primary">Approve Requests</a>
-        </div>
-    <?php endif; ?>
-</div>
+        .landing-hero {
+            background: linear-gradient(135deg, #172033, #315a7d);
+            color: #fff;
+        }
 
-<?php if ($isAdmin): ?>
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Items</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['total_items'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Total Stock</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['total_stock'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Pending Requests</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['pending_requests'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Pending Orders</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['pending_orders'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Suppliers</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['suppliers'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-muted small">Out of Stock</div>
-                    <div class="fs-3 fw-semibold"><?= $stats['out_of_stock'] ?></div>
-                </div>
-            </div>
+        .feature-card {
+            border: 0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg bg-white shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-semibold" href="/film_studio/index.php">Film Studio</a>
+        <div class="d-flex gap-2">
+            <?php if ($isLoggedIn): ?>
+                <a href="/film_studio/dashboard.php" class="btn btn-primary">Dashboard</a>
+            <?php else: ?>
+                <a href="/film_studio/auth/login.php" class="btn btn-outline-primary">Login</a>
+            <?php endif; ?>
         </div>
     </div>
+</nav>
 
-    <div class="row g-4">
-        <div class="col-xl-5">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-semibold">Low Stock Items</div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Item</th>
-                                <th>Qty</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!$lowStockItems): ?>
-                                <tr>
-                                    <td colspan="3" class="text-center text-muted py-4">No low stock items.</td>
-                                </tr>
-                            <?php endif; ?>
-                            <?php foreach ($lowStockItems as $item): ?>
-                                <tr>
-                                    <td>
-                                        <a href="/film_studio/inventory/edit_item.php?id=<?= $item['item_id'] ?>">
-                                            <?= htmlspecialchars($item['item_name']) ?>
-                                        </a>
-                                    </td>
-                                    <td><?= (int) $item['quantity'] ?></td>
-                                    <td>
-                                        <span class="badge <?= dashboardBadgeClass($item['status']) ?>">
-                                            <?= htmlspecialchars($item['status']) ?>
-                                        </span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-7">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-semibold">Recent Requests</div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Requester</th>
-                                <th>Item</th>
-                                <th>Qty</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!$recentRequests): ?>
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted py-4">No recent requests.</td>
-                                </tr>
-                            <?php endif; ?>
-                            <?php foreach ($recentRequests as $request): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($request['full_name']) ?></td>
-                                    <td><?= htmlspecialchars($request['item_name']) ?></td>
-                                    <td><?= (int) $request['quantity'] ?></td>
-                                    <td>
-                                        <span class="badge <?= dashboardBadgeClass($request['status']) ?>">
-                                            <?= htmlspecialchars($request['status']) ?>
-                                        </span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-7">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white fw-semibold">Recent Purchase Orders</div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>PO</th>
-                                <th>Supplier</th>
-                                <th>Items</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!$recentOrders): ?>
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No purchase orders.</td>
-                                </tr>
-                            <?php endif; ?>
-                            <?php foreach ($recentOrders as $order): ?>
-                                <tr>
-                                    <td>
-                                        <a href="/film_studio/purchase_orders/view.php?id=<?= $order['po_id'] ?>">
-                                            #<?= $order['po_id'] ?>
-                                        </a>
-                                    </td>
-                                    <td><?= htmlspecialchars($order['supplier_name']) ?></td>
-                                    <td><?= (int) $order['item_count'] ?></td>
-                                    <td>
-                                        <span class="badge <?= dashboardBadgeClass($order['status']) ?>">
-                                            <?= htmlspecialchars($order['status']) ?>
-                                        </span>
-                                    </td>
-                                    <td><?= htmlspecialchars($order['created_at'] ?? $order['order_date'] ?? 'N/A') ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-5">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white fw-semibold">Quick Actions</div>
-                <div class="card-body d-grid gap-2">
-                    <a href="/film_studio/inventory/index.php" class="btn btn-outline-primary text-start">Manage Inventory</a>
-                    <a href="/film_studio/suppliers/index.php" class="btn btn-outline-secondary text-start">Manage Suppliers</a>
-                    <a href="/film_studio/purchase_orders/index.php" class="btn btn-outline-primary text-start">Manage Purchase Orders</a>
-                    <a href="/film_studio/reports/index.php" class="btn btn-outline-info text-start">View Reports</a>
-                </div>
-            </div>
-        </div>
-    </div>
-<?php endif; ?>
-
-<?php if ($role === 'STAFF'): ?>
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Request Inventory</h5>
-                    <p class="card-text text-muted">Create requests for equipment or inventory items and track your request history.</p>
+<main class="landing-shell">
+    <section class="landing-hero py-5">
+        <div class="container py-5">
+            <div class="row align-items-center g-5">
+                <div class="col-lg-7">
+                    <h1 class="display-5 fw-semibold mb-3">Film Studio Inventory System</h1>
+                    <p class="lead mb-4">
+                        Manage studio equipment, inventory requests, suppliers, and purchase orders from one organized workspace.
+                    </p>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="/film_studio/requests/create.php" class="btn btn-success">Create Request</a>
-                        <a href="/film_studio/requests/my_requests.php" class="btn btn-outline-primary">My Requests</a>
+                        <?php if ($isLoggedIn): ?>
+                            <a href="/film_studio/dashboard.php" class="btn btn-light btn-lg">Open Dashboard</a>
+                        <?php else: ?>
+                            <a href="/film_studio/auth/login.php" class="btn btn-light btn-lg">Login</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="bg-white text-dark rounded-3 shadow p-4">
+                        <div class="d-flex justify-content-between border-bottom pb-3 mb-3">
+                            <span class="text-muted">Inventory Status</span>
+                            <span class="badge bg-success">Live</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span>Equipment tracking</span>
+                            <strong>Ready</strong>
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span>Request approvals</span>
+                            <strong>Managed</strong>
+                        </div>
+                        <div class="d-flex justify-content-between py-2">
+                            <span>Purchase orders</span>
+                            <strong>Organized</strong>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-<?php endif; ?>
+    </section>
 
-<?php require_once __DIR__ . "/includes/footer.php"; ?>
+    <section class="py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card feature-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Inventory Control</h5>
+                            <p class="card-text text-muted">Track item quantities, availability, and stock status.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card feature-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Request Workflow</h5>
+                            <p class="card-text text-muted">Let staff request equipment and managers approve usage.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card feature-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Procurement</h5>
+                            <p class="card-text text-muted">Manage suppliers, purchase orders, and received stock.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

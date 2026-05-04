@@ -54,12 +54,12 @@ require_once __DIR__ . "/auth_check.php";
 <div class="app-shell d-flex">
   <aside class="app-sidebar text-white p-3 p-md-4 shadow-sm">
     <div class="d-flex align-items-center justify-content-between mb-4">
-      <a class="fs-5 fw-semibold text-white text-decoration-none" href="/film_studio/index.php">Film Studio</a>
+      <a class="fs-5 fw-semibold text-white text-decoration-none" href="/film_studio/dashboard.php">Film Studio</a>
       <span class="badge bg-secondary"><?= htmlspecialchars($_SESSION['role'] ?? '') ?></span>
     </div>
 
     <nav class="nav flex-column gap-1">
-      <a class="nav-link" href="/film_studio/index.php">Dashboard</a>
+      <a class="nav-link" href="/film_studio/dashboard.php">Dashboard</a>
 
       <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'ADMIN' || $_SESSION['role'] === 'MANAGER')): ?>
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Inventory</div>

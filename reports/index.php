@@ -30,6 +30,6 @@ $pending = $conn->query("SELECT COUNT(*) FROM requests WHERE status='PENDING'")-
 <p>Pending: <?= $pending ?></p>
 
 <br>
-<a href="/film_studio/index.php" class="btn btn-secondary">Back</a>
+<a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
 
 <?php require_once __DIR__ . "/../includes/footer.php"; ?>

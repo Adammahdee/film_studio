@@ -64,7 +64,7 @@ $user = $stmt->fetch();
             </div>
         </div>
         <div class="mt-3 text-center">
-            <a href="index.php" class="btn btn-secondary">Back to Dashboard</a>
+            <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back to Dashboard</a>
         </div>
     </div>
 </div>

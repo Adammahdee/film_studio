@@ -18,5 +18,7 @@ A simple PHP-based inventory and request management system.
 ## Setup
 
 1. Clone repo
-2. Configure database in config/db.php
-3. Run on Laragon or XAMPP
+2. Copy `config/db.example.php` to `config/db.php`
+3. Configure database credentials in `config/db.php`
+4. Import `database_SQL`
+5. Run on Laragon or XAMPP

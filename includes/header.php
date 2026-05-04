@@ -13,68 +13,82 @@ require_once __DIR__ . "/auth_check.php";
     <title>Film Studio System</title>
     <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .app-shell {
+            min-height: 100vh;
+        }
+
+        .app-sidebar {
+            width: 260px;
+            background: #1f2937;
+        }
+
+        .app-sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.78);
+            border-radius: 6px;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .app-sidebar .nav-link:hover,
+        .app-sidebar .nav-link:focus {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .app-content {
+            min-width: 0;
+        }
+
+        @media (max-width: 767.98px) {
+            .app-shell {
+                display: block !important;
+            }
+
+            .app-sidebar {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
-  <div class="container">
-    <a class="navbar-brand" href="/film_studio/index.php">Film Studio</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarText">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="/film_studio/index.php">Dashboard</a></li>
-        <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'ADMIN' || $_SESSION['role'] === 'MANAGER')): ?>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Inventory
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="inventoryDropdown">
-            <li><a class="dropdown-item" href="/film_studio/inventory/index.php">View Inventory</a></li>
-            <li><a class="dropdown-item" href="/film_studio/inventory/add_item.php">Add Item</a></li>
-          </ul>
-        </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="suppliersDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Suppliers
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="suppliersDropdown">
-            <li><a class="dropdown-item" href="/film_studio/suppliers/index.php">Manage Suppliers</a></li>
-          </ul>
-        </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="procurementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Procurement
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="procurementDropdown">
-            <li><a class="dropdown-item" href="/film_studio/purchase_orders/index.php">Purchase Orders</a></li>
-            <li><a class="dropdown-item" href="/film_studio/purchase_orders/create.php">Create Purchase Order</a></li>
-            <li><a class="dropdown-item" href="/film_studio/requests/approve.php">Approve Requests</a></li>
-            <li><a class="dropdown-item" href="/film_studio/requests/index.php">View All Requests</a></li>
-          </ul>
-        </li>
-        <?php endif; ?>
-        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'STAFF'): ?>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Requests
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="requestsDropdown">
-            <li><a class="dropdown-item" href="/film_studio/requests/create.php">Create Request</a></li>
-            <li><a class="dropdown-item" href="/film_studio/requests/my_requests.php">My Requests</a></li>
-          </ul>
-        </li>
-        <?php endif; ?>
-      </ul>
-      <div class="d-flex text-white align-items-center gap-3">
-        <?php if (isset($_SESSION['user_id'])): ?>
-            <a href="/film_studio/profile.php" class="text-white text-decoration-none">Profile</a>
-            <span class="badge bg-secondary"><?php echo htmlspecialchars($_SESSION['role'] ?? ''); ?></span>
-            <a href="/film_studio/auth/logout.php" class="btn btn-outline-danger btn-sm">Logout</a>
-        <?php endif; ?>
-      </div>
+<div class="app-shell d-flex">
+  <aside class="app-sidebar text-white p-3 p-md-4 shadow-sm">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+      <a class="fs-5 fw-semibold text-white text-decoration-none" href="/film_studio/index.php">Film Studio</a>
+      <span class="badge bg-secondary"><?= htmlspecialchars($_SESSION['role'] ?? '') ?></span>
     </div>
-  </div>
-</nav>
 
-<div class="container">
+    <nav class="nav flex-column gap-1">
+      <a class="nav-link" href="/film_studio/index.php">Dashboard</a>
+
+      <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'ADMIN' || $_SESSION['role'] === 'MANAGER')): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Inventory</div>
+        <a class="nav-link" href="/film_studio/inventory/index.php">View Inventory</a>
+        <a class="nav-link" href="/film_studio/inventory/add_item.php">Add Item</a>
+
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Operations</div>
+        <a class="nav-link" href="/film_studio/suppliers/index.php">Suppliers</a>
+        <a class="nav-link" href="/film_studio/purchase_orders/index.php">Purchase Orders</a>
+        <a class="nav-link" href="/film_studio/purchase_orders/create.php">Create Purchase Order</a>
+
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
+        <a class="nav-link" href="/film_studio/requests/approve.php">Approve Requests</a>
+        <a class="nav-link" href="/film_studio/requests/index.php">View All Requests</a>
+        <a class="nav-link" href="/film_studio/reports/index.php">Reports</a>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'STAFF'): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
+        <a class="nav-link" href="/film_studio/requests/create.php">Create Request</a>
+        <a class="nav-link" href="/film_studio/requests/my_requests.php">My Requests</a>
+      <?php endif; ?>
+    </nav>
+
+    <div class="border-top border-secondary mt-4 pt-3">
+      <a href="/film_studio/profile.php" class="nav-link px-0 text-white-50">Profile</a>
+      <a href="/film_studio/auth/logout.php" class="btn btn-outline-light btn-sm w-100 mt-2">Logout</a>
+    </div>
+  </aside>
+
+  <main class="app-content flex-grow-1 p-3 p-md-4">
+    <div class="container-fluid">

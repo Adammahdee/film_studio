@@ -6,6 +6,8 @@ if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
 
+require_once __DIR__ . "/../includes/header.php";
+
 $total_items = $conn->query("SELECT COUNT(*) FROM inventory")->fetchColumn();
 $total_stock = $conn->query("SELECT SUM(quantity) FROM inventory")->fetchColumn();
 
@@ -28,4 +30,6 @@ $pending = $conn->query("SELECT COUNT(*) FROM requests WHERE status='PENDING'")-
 <p>Pending: <?= $pending ?></p>
 
 <br>
-<a href="/film_studio/index.php">Back</a>
+<a href="/film_studio/index.php" class="btn btn-secondary">Back</a>
+
+<?php require_once __DIR__ . "/../includes/footer.php"; ?>

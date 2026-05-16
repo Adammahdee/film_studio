@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] !== 'STAFF') {

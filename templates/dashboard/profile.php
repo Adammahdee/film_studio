@@ -2,14 +2,13 @@
 use App\Core\Csrf;
 use App\Core\DatabaseTransaction;
 use App\Services\AuditLogger;
-
-require_once ROOT_PATH . "src/Auth/Auth_check.php";
+require_once ROOT_PATH . "src/Auth/auth_check.php";
 require_once ROOT_PATH . "templates/includes/header.php";
 
 $user_id = $_SESSION['user_id'];
 $msg = "";
 
-// Fetch Current User Data
+// Fetch Current User Data (Initial fetch for form and logging state)
 $stmt = $conn->prepare("SELECT full_name, role, password FROM users WHERE user_id = ?");
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
@@ -82,4 +81,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </div>
+
 <?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

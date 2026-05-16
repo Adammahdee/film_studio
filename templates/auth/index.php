@@ -3,6 +3,8 @@
  * Authentication View (Login/Logout)
  * NOTE: Auth_check.php is NOT included here to prevent recursive redirect loops.
  */
+use App\Services\AuditLogger;
+use App\Core\Csrf;
 require_once ROOT_PATH . 'config/db.php';
 
 // Handle Logout Action
@@ -14,6 +16,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     }
     // Clear the cookie
     setcookie('remember_me', '', time() - 3600, "/", "", isset($_SERVER['HTTPS']), true);
+    AuditLogger::log('LOGOUT', 'Auth', $_SESSION['user_id'] ?? null);
     $_SESSION = [];
     session_destroy();
     header("Location: " . url('auth'));
@@ -23,6 +26,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
 $error = null;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // CSRF Protection
+    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
+        $error = "Invalid CSRF token. Please try again.";
+        // Log this attempt for security monitoring
+        error_log("CSRF attack detected on login form from IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
+    } else {
     $name = trim($_POST['full_name'] ?? '');
     $password = $_POST['password'] ?? '';
     $remember = isset($_POST['remember']);
@@ -35,6 +44,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $_SESSION['user_id'] = $user['user_id'];
         $_SESSION['role']    = $user['role'];
 
+        AuditLogger::log('LOGIN', 'Auth', $user['user_id']);
         if ($remember) {
             // Generate a random token
             $token = bin2hex(random_bytes(32));
@@ -54,6 +64,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         $error = "Invalid login credentials.";
     }
+    }
 }
 ?>
 
@@ -61,6 +72,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <h2 class="text-center mb-4">Studio Login</h2>
     <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
     <form action="<?= url('auth') ?>" method="POST">
+        <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
         <div class="mb-3"><input name="full_name" class="form-control" placeholder="Full Name" required autofocus></div>
         <div class="mb-3"><input type="password" name="password" class="form-control" placeholder="Password" required></div>
         <div class="mb-3 form-check">

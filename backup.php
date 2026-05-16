@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . "/includes/auth_check.php";
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once __DIR__ . "/config/db.php";
 
 // Quick admin check
@@ -89,7 +89,7 @@ require_once __DIR__ . "/includes/header.php";
                 </div>
             </div>
             <div class="card-footer text-center">
-                <a href="<?= url('settings') ?>" class="btn btn-link">Back to Settings</a>
+                <a href="/index.php?page=settings" class="btn btn-link">Back to Settings</a>
             </div>
         </div>
     </div>

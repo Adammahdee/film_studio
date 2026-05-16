@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] != 'STAFF') {
@@ -35,7 +35,7 @@ $requests = $stmt->fetchAll();
                     <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
-                <form method="POST" action="store.php">
+                <form method="POST" action="<?= url('requests', 'store') ?>">
                     <div class="mb-3">
                         <label class="form-label">Select Item</label>
                         <select name="item_id" class="form-select" required>
@@ -95,8 +95,8 @@ $requests = $stmt->fetchAll();
 </div>
 
 <div class="mt-3">
-    <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
-    <a href="/film_studio/requests/my_requests.php" class="btn btn-outline-primary">View My Requests</a>
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
+    <a href="<?= url('requests', 'my_requests') ?>" class="btn btn-outline-primary">View My Requests</a>
 </div>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

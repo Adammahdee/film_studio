@@ -1,32 +1,48 @@
 <?php
-require_once __DIR__ . "/includes/auth_check.php";
-require_once __DIR__ . "/config/db.php";
-require_once __DIR__ . "/includes/header.php";
+use App\Core\Csrf;
+use App\Auth\Permissions;
+use App\Core\ErrorHandler;
+use App\Services\AuditLogger;
+use App\Core\DatabaseTransaction;
+require_once ROOT_PATH . "src/Auth/auth_check.php";
+require_once ROOT_PATH . "templates/includes/header.php";
 
 // Fetch user role to ensure only admins have access
 $user_id = $_SESSION['user_id'];
-$stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
-$stmt->execute([$user_id]);
-$user = $stmt->fetch();
-
-if ($user['role'] !== 'ADMIN') {
-    echo '<div class="alert alert-danger">Access Denied. Admins only.</div>';
-    require_once __DIR__ . "/includes/footer.php";
+// Use Permissions helper for access control
+if (!Permissions::hasPermission($_SESSION['role'] ?? '', 'system_settings')) {
+    // For now, just die. Later, use ErrorHandler::render403()
+    die('<div class="alert alert-danger">Access Denied. You do not have permission to view system settings.</div>');
+    // require_once ROOT_PATH . "templates/includes/footer.php"; // This line was problematic with die()
     exit();
 }
 
 $msg = "";
 
 // Handle Settings Update
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        foreach ($_POST['settings'] as $key => $value) {
-            $stmt = $conn->prepare("REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
-            $stmt->execute([$key, trim($value)]);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') { // This will be replaced by Permissions::hasPermission later
+    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
+        $msg = '<div class="alert alert-danger">Invalid CSRF token. Please try again.</div>';
+        error_log("CSRF attack detected on settings form from IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
+    } else {
+        try {
+            DatabaseTransaction::begin();
+            $oldSettings = [];
+            foreach ($_POST['settings'] as $key => $value) {
+                // Fetch old value for logging
+                $oldStmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
+                $oldStmt->execute([$key]);
+                $oldSettings[$key] = $oldStmt->fetchColumn();
+                $stmt = $conn->prepare("REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
+                $stmt->execute([$key, trim($value)]);
+            }
+            AuditLogger::log('UPDATE', 'System Settings', null, $oldSettings, $_POST['settings']);
+            DatabaseTransaction::commit();
+            $msg = '<div class="alert alert-success">Settings updated successfully.</div>';
+        } catch (PDOException $e) {
+            DatabaseTransaction::rollback();
+            $msg = '<div class="alert alert-danger">Error updating settings: ' . htmlspecialchars($e->getMessage()) . '</div>';
         }
-        $msg = '<div class="alert alert-success">Settings updated successfully.</div>';
-    } catch (PDOException $e) {
-        $msg = '<div class="alert alert-danger">Error updating settings.</div>';
     }
 }
 
@@ -47,6 +63,7 @@ while ($row = $stmt->fetch()) {
             <div class="card-body">
                 <?= $msg ?>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
                     <div class="mb-3">
                         <label class="form-label">Site Name</label>
                         <input type="text" name="settings[site_name]" class="form-control" 
@@ -73,7 +90,7 @@ while ($row = $stmt->fetch()) {
                     </div>
                     <hr>
                     <div class="d-flex justify-content-between">
-                        <a href="/index.php?page=dashboard" class="btn btn-secondary">Cancel</a>
+                        <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Cancel</a>
                         <button type="submit" class="btn btn-primary">Save Configuration</button>
                     </div>
                 </form>
@@ -86,10 +103,10 @@ while ($row = $stmt->fetch()) {
             </div>
             <div class="card-body">
                 <p>Manage your system data by performing backups or restoring from a previous state.</p>
-                <a href="/index.php?page=backup" class="btn btn-outline-primary">Go to Backup/Restore</a>
+                <a href="<?= url('backup') ?>" class="btn btn-outline-primary">Go to Backup/Restore</a>
             </div>
         </div>
     </div>
 </div>
 
-<?php require_once __DIR__ . "/includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

@@ -1,12 +1,12 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
 
-require_once __DIR__ . "/../includes/header.php";
+require_once ROOT_PATH . "templates/includes/header.php";
 
 if (isset($_GET['action']) && isset($_GET['id'])) {
 
@@ -95,8 +95,8 @@ $requests = $stmt->fetchAll();
                     </td>
                     <td>
                         <?php if ($r['status'] == 'PENDING'): ?>
-                            <a href="?action=approve&id=<?= $r['request_id'] ?>" class="btn btn-success btn-sm">Approve</a>
-                            <a href="?action=reject&id=<?= $r['request_id'] ?>" class="btn btn-danger btn-sm">Reject</a>
+                            <a href="<?= url('requests', 'approve', ['action_type' => 'approve', 'id' => $r['request_id']]) ?>" class="btn btn-success btn-sm">Approve</a>
+                            <a href="<?= url('requests', 'approve', ['action_type' => 'reject', 'id' => $r['request_id']]) ?>" class="btn btn-danger btn-sm">Reject</a>
                         <?php else: ?>
                             <span class="text-muted">Done</span>
                         <?php endif; ?>
@@ -109,7 +109,7 @@ $requests = $stmt->fetchAll();
 </div>
 
 <div class="mt-3">
-    <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
 </div>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

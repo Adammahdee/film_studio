@@ -14,10 +14,10 @@ if ($id) {
         $stmt->execute([$id]);
     } catch (PDOException $e) {
         // Catch foreign key constraint violation if supplier is used in orders
-        die("Error: Cannot delete supplier. They may have associated purchase orders. <a href='index.php'>Back</a>");
+        die("Error: Cannot delete supplier. They may have associated purchase orders. <a href='" . url('suppliers') . "'>Back</a>");
     }
 }
 
-header("Location: index.php");
+header("Location: " . url('suppliers'));
 exit;
 ?>

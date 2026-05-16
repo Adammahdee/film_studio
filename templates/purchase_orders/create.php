@@ -1,20 +1,23 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+// templates/purchase_orders/create.php
+
+// 1. Resolve dependencies safely using absolute ROOT_PATH
+require_once ROOT_PATH . 'src/Auth/Auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
+// Role access security check
 if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
 
-require_once __DIR__ . "/../includes/header.php";
-
-$suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name ASC")->fetchAll();
-$items = $conn->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAll();
+// 2. Fetch data using the centralized $pdo instance (not $conn) as raw arrays
+$suppliers = $pdo->query("SELECT * FROM suppliers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$items = $pdo->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Create Purchase Order</h2>
-    <a href="index.php" class="btn btn-secondary">Back</a>
+    <a href="<?= url('purchase_orders'); ?>" class="btn btn-secondary">Back</a>
 </div>
 
 <div class="card shadow-sm">
@@ -22,7 +25,8 @@ $items = $conn->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAl
         <?php if (!empty($_GET['error'])): ?>
             <div class="alert alert-danger"><?= htmlspecialchars($_GET['error']) ?></div>
         <?php endif; ?>
-        <form method="POST" action="store.php">
+        
+        <form method="POST" action="<?= url('purchase_orders'); ?>&action=store">
             
             <div class="mb-4">
                 <label class="form-label">Supplier</label>
@@ -77,12 +81,10 @@ document.getElementById('add-row').addEventListener('click', function() {
     const container = document.getElementById('items-container');
     const row = container.querySelector('.item-row').cloneNode(true);
     
-    // Reset values
+    // Reset values smoothly
     row.querySelectorAll('input').forEach(input => input.value = '');
     row.querySelector('select').value = '';
     
     container.appendChild(row);
 });
 </script>
-
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>

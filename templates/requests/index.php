@@ -1,12 +1,13 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+use App\Auth\Permissions;
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
-if ($_SESSION['role'] !== 'ADMIN' && $_SESSION['role'] !== 'MANAGER') {
-    die("Access denied");
+if (!Permissions::hasPermission($_SESSION['role'] ?? '', 'approve_request') && !Permissions::hasPermission($_SESSION['role'] ?? '', 'view_all_requests')) {
+    die('<div class="alert alert-danger">Access Denied. You do not have permission to view requests.</div>');
 }
 
-require_once __DIR__ . "/../includes/header.php";
+require_once ROOT_PATH . "templates/includes/header.php";
 
 $stmt = $conn->query("
     SELECT r.*, u.full_name, i.item_name
@@ -20,7 +21,7 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>All Requests</h2>
-    <a href="/film_studio/requests/approve.php" class="btn btn-primary">Manage Approvals</a>
+    <a href="<?= url('requests', 'approve') ?>" class="btn btn-primary">Manage Approvals</a>
 </div>
 
 <div class="card shadow-sm">
@@ -56,7 +57,7 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <div class="mt-3">
-    <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
 </div>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

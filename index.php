@@ -104,7 +104,6 @@ $isLoggedIn = isset($_SESSION['user_id']);
                         </div>
                     </div>
                 </div>
-                <!-- Additional feature cards can be added here -->
             </div>
         </div>
     </section>

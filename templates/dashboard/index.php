@@ -2,7 +2,8 @@
 /**
  * Centralized Dashboard Controller
  */
-require_once ROOT_PATH . 'src/Auth/Auth_check.php';
+use App\Auth\Permissions;
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'templates/includes/header.php';
 
 /* --- Fetch Dashboard Statistics --- */
@@ -16,7 +17,7 @@ $stats = [
     'low_stock'        => 0
 ];
 
-if ($isAdmin) {
+if (Permissions::isAtLeast($role, 'MANAGER')) { // Use permission helper
     $stats = [
         'total_items'      => (int) $conn->query("SELECT COUNT(*) FROM inventory")->fetchColumn(),
         'pending_requests' => (int) $conn->query("SELECT COUNT(*) FROM requests WHERE status = 'PENDING'")->fetchColumn(),
@@ -30,10 +31,10 @@ if ($isAdmin) {
         <h2 class="mb-1">Studio Overview</h2>
         <p class="text-muted">Welcome back, <?= htmlspecialchars($_SESSION['role']) ?>.</p>
     </div>
-    <?php if ($isAdmin): ?>
+    <?php if (Permissions::hasPermission($role, 'manage_inventory')): ?>
         <div class="d-flex gap-2">
             <a href="<?= url('inventory', 'add') ?>" class="btn btn-success">Add Item</a>
-            <a href="<?= url('purchase_orders', 'create') ?>" class="btn btn-primary">New PO</a>
+            <a href="<?= url('purchase_orders', 'create') ?>" class="btn btn-primary">New PO</a> <!-- Assuming this requires manage_suppliers or receive_goods -->
         </div>
     <?php endif; ?>
 </div>
@@ -76,17 +77,20 @@ if ($isAdmin) {
                     <a href="<?= url('inventory') ?>" class="list-group-item list-group-item-action py-3">Manage Inventory Gear</a>
                     <a href="<?= url('requests') ?>" class="list-group-item list-group-item-action py-3">View Procurement Requests</a>
                     <a href="<?= url('suppliers') ?>" class="list-group-item list-group-item-action py-3">Supplier Directory</a>
-                    <?php if ($role === 'ADMIN'): ?>
+                    <?php if (Permissions::hasPermission($role, 'system_settings')): ?>
                         <a href="<?= url('settings') ?>" class="list-group-item list-group-item-action py-3 text-primary fw-bold">System Administration</a>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-4"> <!-- This section is for all logged-in users -->
         <div class="card shadow-sm">
             <div class="card-header bg-white py-3">Account Information</div>
             <div class="card-body">
+                <?php if (Permissions::hasPermission($role, 'manage_users')): ?>
+                    <p><strong>User Management:</strong> <a href="<?= url('users') ?>">Manage Users</a></p>
+                <?php endif; ?>
                 <p><strong>Session ID:</strong> <span class="text-muted"><?= substr(session_id(), 0, 8) ?>...</span></p>
                 <p><strong>Authorization:</strong> <span class="badge bg-dark"><?= $role ?></span></p>
                 <hr>

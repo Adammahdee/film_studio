@@ -1,10 +1,10 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-// Ensure auth check is run if not already included by the parent page
-require_once __DIR__ . "/auth_check.php";
-require_once __DIR__ . "/settings_loader.php";
+// Session is handled by public/index.php
+// Ensure auth check is run
+require_once ROOT_PATH . "src/Auth/Auth_check.php";
+// Load settings
+require_once ROOT_PATH . "templates/includes/settings_loader.php";
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -65,39 +65,39 @@ require_once __DIR__ . "/settings_loader.php";
     </div>
 
     <nav class="nav flex-column gap-1">
-      <a class="nav-link" href="/index.php?page=dashboard">Dashboard</a>
+      <a class="nav-link" href="<?= url('dashboard') ?>">Dashboard</a>
 
       <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'ADMIN' || $_SESSION['role'] === 'MANAGER')): ?>
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Inventory</div>
-        <a class="nav-link" href="/index.php?page=inventory">View Inventory</a>
-        <a class="nav-link" href="/index.php?page=inventory&action=add">Add Item</a>
+        <a class="nav-link" href="<?= url('inventory') ?>">View Inventory</a>
+        <a class="nav-link" href="<?= url('inventory', 'add') ?>">Add Item</a>
 
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Operations</div>
-        <a class="nav-link" href="/index.php?page=suppliers">Suppliers</a>
-        <a class="nav-link" href="/index.php?page=purchase_orders">Purchase Orders</a>
-        <a class="nav-link" href="/index.php?page=purchase_orders&action=create">Create Purchase Order</a>
+        <a class="nav-link" href="<?= url('suppliers') ?>">Suppliers</a>
+        <a class="nav-link" href="<?= url('purchase_orders') ?>">Purchase Orders</a>
+        <a class="nav-link" href="<?= url('purchase_orders', 'create') ?>">Create Purchase Order</a>
 
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
-        <a class="nav-link" href="/index.php?page=requests&action=approve">Approve Requests</a>
-        <a class="nav-link" href="/index.php?page=requests">View All Requests</a>
-        <a class="nav-link" href="/index.php?page=reports">Reports</a>
+        <a class="nav-link" href="<?= url('requests', 'approve') ?>">Approve Requests</a>
+        <a class="nav-link" href="<?= url('requests') ?>">View All Requests</a>
+        <a class="nav-link" href="<?= url('reports') ?>">Reports</a>
       <?php endif; ?>
 
       <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'STAFF'): ?>
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
-        <a class="nav-link" href="/index.php?page=requests&action=create">Create Request</a>
-        <a class="nav-link" href="/index.php?page=requests&action=my">My Requests</a>
+        <a class="nav-link" href="<?= url('requests', 'create') ?>">Create Request</a>
+        <a class="nav-link" href="<?= url('requests', 'my') ?>">My Requests</a>
       <?php endif; ?>
 
       <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN'): ?>
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Administration</div>
-        <a class="nav-link" href="/index.php?page=settings">System Settings</a>
+        <a class="nav-link" href="<?= url('settings') ?>">System Settings</a>
       <?php endif; ?>
     </nav>
 
     <div class="border-top border-secondary mt-4 pt-3">
-      <a href="/index.php?page=profile" class="nav-link px-0 text-white-50">Profile</a>
-      <a href="/index.php?page=auth&action=logout" class="btn btn-outline-light btn-sm w-100 mt-2">Logout</a>
+      <a href="<?= url('profile') ?>" class="nav-link px-0 text-white-50">Profile</a>
+      <a href="<?= url('auth', 'logout') ?>" class="btn btn-outline-light btn-sm w-100 mt-2">Logout</a>
     </div>
   </aside>
 

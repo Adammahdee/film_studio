@@ -1,5 +1,5 @@
 <?php
-require_once ROOT_PATH . "config/db.php";
+// The global $conn is available from public/index.php, no need to re-require db.php
 
 $settings = [];
 try {

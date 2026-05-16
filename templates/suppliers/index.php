@@ -1,36 +1,52 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+use App\Core\Csrf;
+use App\Validation\SupplierValidator;
+use App\Core\DatabaseTransaction;
+use App\Services\AuditLogger;
+
 require_once ROOT_PATH . 'config/db.php';
 
 // ROLE CHECK
 if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
+// This will be replaced by Permissions::hasPermission later
 
-require_once __DIR__ . "/../includes/header.php";
+require_once ROOT_PATH . "templates/includes/header.php";
 
 // HANDLE FORM SUBMISSION
 $msg = "";
+$errors = [];
+$formData = []; // To retain form data on error
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-    $name = trim($_POST['name'] ?? '');
-    $contact_person = trim($_POST['contact_person'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-
-    // BASIC VALIDATION
-    if ($name && $contact_person && $phone) {
-
-        $stmt = $conn->prepare("
-            INSERT INTO suppliers (name, contact_person, phone, email)
-            VALUES (?, ?, ?, ?)
-        ");
-
-        $stmt->execute([$name, $contact_person, $phone, $email]);
-        $msg = '<div class="alert alert-success">Supplier added successfully</div>';
-
+    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
+        $msg = '<div class="alert alert-danger">Invalid CSRF token. Please try again.</div>';
+        error_log("CSRF attack detected on add supplier form from IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
     } else {
-        $msg = '<div class="alert alert-danger">All required fields must be filled.</div>';
+        $formData = [
+            'name'           => trim($_POST['name'] ?? ''),
+            'contact_person' => trim($_POST['contact_person'] ?? ''),
+            'phone'          => trim($_POST['phone'] ?? ''),
+            'email'          => trim($_POST['email'] ?? '')
+        ];
+
+        $errors = SupplierValidator::validateSupplier($formData);
+
+        if (empty($errors)) {
+            try {
+                DatabaseTransaction::begin();
+                $stmt = $conn->prepare("INSERT INTO suppliers (name, contact_person, phone, email) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$formData['name'], $formData['contact_person'], $formData['phone'], $formData['email']]);
+                AuditLogger::log('CREATE', 'Suppliers', (int)$conn->lastInsertId(), null, $formData);
+                DatabaseTransaction::commit();
+                $msg = '<div class="alert alert-success">Supplier added successfully</div>';
+            } catch (PDOException $e) {
+                DatabaseTransaction::rollback();
+                $msg = '<div class="alert alert-danger">Error adding supplier: ' . htmlspecialchars($e->getMessage()) . '</div>';
+            }
+        } else {
+            $msg = '<div class="alert alert-danger">Please correct the errors below.</div>';
+        }
     }
 }
 
@@ -48,17 +64,22 @@ $suppliers = $conn->query("
     <div class="card-body">
         <?= $msg ?>
         <form method="POST" class="row g-3">
+            <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
             <div class="col-md-3">
-                <input type="text" name="name" class="form-control" placeholder="Supplier Name" required>
+                <input type="text" name="name" class="form-control <?= isset($errors['name']) ? 'is-invalid' : '' ?>" placeholder="Supplier Name" value="<?= htmlspecialchars($formData['name'] ?? '') ?>" required>
+                <?php if (isset($errors['name'])): ?><div class="invalid-feedback"><?= $errors['name'] ?></div><?php endif; ?>
             </div>
             <div class="col-md-3">
-                <input type="text" name="contact_person" class="form-control" placeholder="Contact Person" required>
+                <input type="text" name="contact_person" class="form-control <?= isset($errors['contact_person']) ? 'is-invalid' : '' ?>" placeholder="Contact Person" value="<?= htmlspecialchars($formData['contact_person'] ?? '') ?>" required>
+                <?php if (isset($errors['contact_person'])): ?><div class="invalid-feedback"><?= $errors['contact_person'] ?></div><?php endif; ?>
             </div>
             <div class="col-md-3">
-                <input type="text" name="phone" class="form-control" placeholder="Phone" required>
+                <input type="text" name="phone" class="form-control <?= isset($errors['phone']) ? 'is-invalid' : '' ?>" placeholder="Phone" value="<?= htmlspecialchars($formData['phone'] ?? '') ?>" required>
+                <?php if (isset($errors['phone'])): ?><div class="invalid-feedback"><?= $errors['phone'] ?></div><?php endif; ?>
             </div>
             <div class="col-md-3">
-                <input type="email" name="email" class="form-control" placeholder="Email">
+                <input type="email" name="email" class="form-control <?= isset($errors['email']) ? 'is-invalid' : '' ?>" placeholder="Email" value="<?= htmlspecialchars($formData['email'] ?? '') ?>">
+                <?php if (isset($errors['email'])): ?><div class="invalid-feedback"><?= $errors['email'] ?></div><?php endif; ?>
             </div>
             <div class="col-12">
                 <button type="submit" class="btn btn-success">Add Supplier</button>
@@ -88,10 +109,13 @@ $suppliers = $conn->query("
                 <td><?= htmlspecialchars($s['phone'] ?? '') ?></td>
                 <td><?= htmlspecialchars($s['email'] ?? '') ?></td>
                 <td>
-                    <a href="edit.php?id=<?= $s['supplier_id'] ?>" class="btn btn-warning btn-sm">Edit</a>
-                    <a href="delete.php?id=<?= $s['supplier_id'] ?>" 
-                       class="btn btn-danger btn-sm"
-                       onclick="return confirm('Are you sure you want to delete this supplier?');">Delete</a>
+                    <a href="<?= url('suppliers', 'edit', ['id' => $s['supplier_id']]) ?>" class="btn btn-warning btn-sm">Edit</a>
+                    <form action="<?= url('suppliers', 'delete') ?>" method="POST" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
+                        <input type="hidden" name="supplier_name" value="<?= htmlspecialchars($s['name']) ?>"> <!-- For logging -->
+                        <input type="hidden" name="id" value="<?= $s['supplier_id'] ?>">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this supplier?');">Delete</button>
+                    </form>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -100,7 +124,7 @@ $suppliers = $conn->query("
 </div>
 
 <div class="mt-3">
-    <a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
 </div>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

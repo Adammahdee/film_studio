@@ -10,10 +10,19 @@ error_reporting(E_ALL);
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+// Time-sensitive loop detection: Reset counter if more than 2 seconds since last hit.
+// This distinguishes between an automated redirect loop and normal user navigation.
+$now = time();
+$lastHit = $_SESSION['last_redirect_time'] ?? 0;
+if ($now - $lastHit > 2) {
+    $_SESSION['redirect_hop_count'] = 0;
+}
+$_SESSION['last_redirect_time'] = $now;
 $_SESSION['redirect_hop_count'] = ($_SESSION['redirect_hop_count'] ?? 0) + 1;
 
-// If the page reloads itself more than 3 times instantly, kill it and show the map
-if ($_SESSION['redirect_hop_count'] > 3) {
+// Increase limit to 6 to allow for complex legitimate redirect chains (e.g. root -> gateway -> auth -> dashboard)
+if ($_SESSION['redirect_hop_count'] > 6) {
     $_SESSION['redirect_hop_count'] = 0; // Reset counter for next test
     
     echo "<div style='font-family:sans-serif; padding:20px; border:3px solid #ff4d4d; background:#fff2f2; border-radius:8px;'>";
@@ -82,25 +91,45 @@ switch ($page) {
         require_once ROOT_PATH . 'templates/inventory/index.php';
         break;
         
+    case 'landing':
+        require_once ROOT_PATH . 'templates/landing/index.php';
+        break;
+
     case 'requests':
-        require_once ROOT_PATH . 'templates/requests/index.php';
+        $action = $_GET['action'] ?? 'index';
+        if ($action === 'create') {
+            require_once ROOT_PATH . 'templates/requests/create.php';
+        } elseif ($action === 'approve') {
+            require_once ROOT_PATH . 'templates/requests/approve.php';
+        } elseif ($action === 'my_requests') {
+            require_once ROOT_PATH . 'templates/requests/my_requests.php';
+        } elseif ($action === 'store') {
+            require_once ROOT_PATH . 'templates/requests/store.php';
+        } else {
+            require_once ROOT_PATH . 'templates/requests/index.php';
+        }
         break;
 
     case 'suppliers':
-        require_once ROOT_PATH . 'templates/suppliers/index.php';
+        $action = $_GET['action'] ?? 'index';
+        if ($action === 'edit') {
+            require_once ROOT_PATH . 'templates/suppliers/edit.php';
+        } else {
+            require_once ROOT_PATH . 'templates/suppliers/index.php';
+        }
         break;
 
     case 'settings':
         // FIX: Pointing to the new template migration directory
-        require_once ROOT_PATH . 'templates/dashboard/settings_legacy.php';
+        require_once ROOT_PATH . 'templates/dashboard/settings.php';
         break;
 
     case 'backup':
-        require_once ROOT_PATH . 'templates/backup_legacy/backup.php';
+        require_once ROOT_PATH . 'templates/admin/backup.php';
         break;
 
     case 'maintenance':
-        require_once ROOT_PATH . 'templates/backup_legacy/maintenance.php';
+        require_once ROOT_PATH . 'templates/errors/maintenance.php';
         break;
 
     case 'reports':
@@ -109,7 +138,22 @@ switch ($page) {
 
     case 'profile':
         // FIX: Pointing to the new template migration directory
-        require_once ROOT_PATH . 'templates/dashboard/profile_legacy.php';
+        require_once ROOT_PATH . 'templates/dashboard/profile.php';
+        break;
+// ... Existing cases (reports, profile, etc.) ...
+
+    case 'purchase_orders':
+        // Capture the internal action parameter (defaults to listing page)
+        $action = $_GET['action'] ?? 'index';
+
+        if ($action === 'create') {
+            require_once ROOT_PATH . 'templates/purchase_orders/create.php';
+        } elseif ($action === 'store') {
+            require_once ROOT_PATH . 'templates/purchase_orders/store.php';
+        } else {
+            // Default sub-route maps to your index/list layout view
+            require_once ROOT_PATH . 'templates/purchase_orders/index.php';
+        }
         break;
 
     case 'dashboard':

@@ -16,6 +16,5 @@ function url(string $page = 'dashboard', ?string $action = null, array $params =
     if ($action !== null) $data['action'] = $action;
     if ($params) $data = array_merge($data, $params);
     
-    // Point strictly to the public entry point to avoid legacy folder routing
     return '/film_studio/public/index.php?' . http_build_query($data);
 }

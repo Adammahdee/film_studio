@@ -1,12 +1,16 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+use App\Auth\Permissions;
 require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
     die("Access denied");
 }
+// Use Permissions helper for access control
+if (!Permissions::hasPermission($_SESSION['role'] ?? '', 'view_reports')) {
+    die('<div class="alert alert-danger">Access Denied. You do not have permission to view reports.</div>');
+}
 
-require_once __DIR__ . "/../includes/header.php";
+require_once ROOT_PATH . "templates/includes/header.php";
 
 $total_items = $conn->query("SELECT COUNT(*) FROM inventory")->fetchColumn();
 $total_stock = $conn->query("SELECT SUM(quantity) FROM inventory")->fetchColumn();
@@ -30,6 +34,6 @@ $pending = $conn->query("SELECT COUNT(*) FROM requests WHERE status='PENDING'")-
 <p>Pending: <?= $pending ?></p>
 
 <br>
-<a href="/film_studio/dashboard.php" class="btn btn-secondary">Back</a>
+<a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

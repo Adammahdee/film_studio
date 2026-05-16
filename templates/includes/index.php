@@ -104,7 +104,22 @@ $isLoggedIn = isset($_SESSION['user_id']);
                         </div>
                     </div>
                 </div>
-                <!-- Additional feature cards can be added here -->
+                <div class="col-md-4">
+                    <div class="card feature-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Request Workflow</h5>
+                            <p class="card-text text-muted">Let staff request equipment and managers approve usage.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card feature-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Procurement</h5>
+                            <p class="card-text text-muted">Manage suppliers, purchase orders, and received stock.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>

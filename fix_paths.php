@@ -42,6 +42,23 @@ foreach ($iterator as $file) {
             $content
         );
 
+        // Pattern 4: Inject CSRF Class Use statement and Token Input into POST forms
+        if (preg_match('/<form\b[^>]*method=[\'"]POST[\'"]/i', $content)) {
+            // Add 'use' statement if missing
+            if (strpos($content, 'use App\Core\Csrf;') === false) {
+                $content = preg_replace('/<\?php\s*/', "<?php\nuse App\Core\Csrf;\n", $content, 1);
+            }
+
+            // Add hidden input after <form> if the csrf_token input is missing
+            if (strpos($content, 'name="csrf_token"') === false) {
+                $content = preg_replace(
+                    '/(<form\b[^>]*method=[\'"]POST[\'"][^>]*>)/i',
+                    "$1\n                    <input type=\"hidden\" name=\"csrf_token\" value=\"<?= Csrf::generateToken() ?>\">",
+                    $content
+                );
+            }
+        }
+
         // If changes were made, save the file back down
         if ($content !== $originalContent) {
             file_put_contents($filePath, $content);

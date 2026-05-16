@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
+require_once ROOT_PATH . 'src/Auth/auth_check.php';
 require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] !== 'STAFF') {
@@ -7,7 +7,7 @@ if ($_SESSION['role'] !== 'STAFF') {
 }
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    header("Location: /film_studio/requests/create.php");
+    header("Location: " . url('requests', 'create'));
     exit();
 }
 
@@ -31,7 +31,7 @@ if ($quantity <= 0) {
 }
 
 if ($error !== "") {
-    header("Location: /film_studio/requests/create.php?error=" . urlencode($error));
+    header("Location: " . url('requests', 'create', ['error' => $error]));
     exit();
 }
 
@@ -41,5 +41,5 @@ $stmt = $conn->prepare("
 ");
 $stmt->execute([$user_id, $item_id, $quantity]);
 
-header("Location: /film_studio/requests/create.php?success=" . urlencode("Request submitted successfully."));
+header("Location: " . url('requests', 'create', ['success' => 'Request submitted successfully.']));
 exit();

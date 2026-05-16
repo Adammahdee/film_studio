@@ -3,6 +3,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . "/includes/settings_loader.php";
+
+// Redirect to maintenance page if enabled and user is not admin
+if (isset($maintenance_mode) && $maintenance_mode && (!isset($_SESSION['role']) || $_SESSION['role'] !== 'ADMIN')) {
+    header("Location: /film_studio/maintenance.php");
+    exit();
+}
+
 $isLoggedIn = isset($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
@@ -10,7 +18,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Film Studio Inventory System</title>
+    <title><?= htmlspecialchars($site_name ?? 'Film Studio') ?> Inventory System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -35,7 +43,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
 <body>
 <nav class="navbar navbar-expand-lg bg-white shadow-sm">
     <div class="container">
-        <a class="navbar-brand fw-semibold" href="/film_studio/index.php">Film Studio</a>
+        <a class="navbar-brand fw-semibold" href="/film_studio/index.php"><?= htmlspecialchars($site_name) ?></a>
         <div class="d-flex gap-2">
             <?php if ($isLoggedIn): ?>
                 <a href="/film_studio/dashboard.php" class="btn btn-primary">Dashboard</a>
@@ -51,7 +59,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         <div class="container py-5">
             <div class="row align-items-center g-5">
                 <div class="col-lg-7">
-                    <h1 class="display-5 fw-semibold mb-3">Film Studio Inventory System</h1>
+                    <h1 class="display-5 fw-semibold mb-3"><?= htmlspecialchars($site_name) ?> Inventory System</h1>
                     <p class="lead mb-4">
                         Manage studio equipment, inventory requests, suppliers, and purchase orders from one organized workspace.
                     </p>

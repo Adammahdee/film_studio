@@ -4,13 +4,14 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 // Ensure auth check is run if not already included by the parent page
 require_once __DIR__ . "/auth_check.php";
+require_once __DIR__ . "/settings_loader.php";
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Film Studio System</title>
+    <title><?= htmlspecialchars($site_name ?? 'Film Studio') ?> System</title>
     <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -54,7 +55,12 @@ require_once __DIR__ . "/auth_check.php";
 <div class="app-shell d-flex">
   <aside class="app-sidebar text-white p-3 p-md-4 shadow-sm">
     <div class="d-flex align-items-center justify-content-between mb-4">
-      <a class="fs-5 fw-semibold text-white text-decoration-none" href="/film_studio/dashboard.php">Film Studio</a>
+      <a class="fs-5 fw-semibold text-white text-decoration-none d-flex align-items-center" href="/film_studio/dashboard.php">
+        <?php if (!empty($studio_logo)): ?>
+          <img src="<?= htmlspecialchars($studio_logo) ?>" alt="Logo" class="me-2" style="height: 24px; width: auto; object-fit: contain;">
+        <?php endif; ?>
+        <?= htmlspecialchars($site_name) ?>
+      </a>
       <span class="badge bg-secondary"><?= htmlspecialchars($_SESSION['role'] ?? '') ?></span>
     </div>
 
@@ -81,6 +87,11 @@ require_once __DIR__ . "/auth_check.php";
         <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
         <a class="nav-link" href="/film_studio/requests/create.php">Create Request</a>
         <a class="nav-link" href="/film_studio/requests/my_requests.php">My Requests</a>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN'): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Administration</div>
+        <a class="nav-link" href="/film_studio/settings.php">System Settings</a>
       <?php endif; ?>
     </nav>
 

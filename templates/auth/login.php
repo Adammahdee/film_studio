@@ -1,6 +1,5 @@
 <?php
-session_start();
-require_once __DIR__ . "/../config/db.php";
+require_once ROOT_PATH . 'config/db.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
@@ -15,7 +14,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $_SESSION['user_id'] = $user['user_id'];
         $_SESSION['role'] = $user['role'];
 
-        header("Location: /film_studio/dashboard.php");
+        header("Location: " . url('dashboard'));
         exit();
     } else {
         echo "Invalid login<br>";

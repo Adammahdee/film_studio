@@ -69,9 +69,9 @@ function dashboardBadgeClass($status)
 
     <?php if ($isAdmin): ?>
         <div class="d-flex gap-2 flex-wrap">
-            <a href="/index.php?page=inventory&action=add" class="btn btn-success">Add Item</a>
-            <a href="/index.php?page=purchase_orders&action=create" class="btn btn-primary">Create Purchase Order</a>
-            <a href="/index.php?page=requests&action=approve" class="btn btn-outline-primary">Approve Requests</a>
+            <a href="<?= url('inventory', 'add') ?>" class="btn btn-success">Add Item</a>
+            <a href="<?= url('purchase_orders', 'create') ?>" class="btn btn-primary">Create Purchase Order</a>
+            <a href="<?= url('requests', 'approve') ?>" class="btn btn-outline-primary">Approve Requests</a>
         </div>
     <?php endif; ?>
 </div>
@@ -150,7 +150,7 @@ function dashboardBadgeClass($status)
                             <?php foreach ($lowStockItems as $item): ?>
                                 <tr>
                                     <td>
-                                        <a href="/index.php?page=inventory&action=edit&id=<?= $item['item_id'] ?>">
+                                        <a href="<?= url('inventory', 'edit', ['id' => $item['item_id']]) ?>">
                                             <?= htmlspecialchars($item['item_name']) ?>
                                         </a>
                                     </td>
@@ -228,7 +228,7 @@ function dashboardBadgeClass($status)
                             <?php foreach ($recentOrders as $order): ?>
                                 <tr>
                                     <td>
-                                        <a href="/index.php?page=purchase_orders&action=view&id=<?= $order['po_id'] ?>">
+                                        <a href="<?= url('purchase_orders', 'view', ['id' => $order['po_id']]) ?>">
                                             #<?= $order['po_id'] ?>
                                         </a>
                                     </td>
@@ -252,10 +252,10 @@ function dashboardBadgeClass($status)
             <div class="card shadow-sm">
                 <div class="card-header bg-white fw-semibold">Quick Actions</div>
                 <div class="card-body d-grid gap-2">
-                    <a href="/index.php?page=inventory" class="btn btn-outline-primary text-start">Manage Inventory</a>
-                    <a href="/index.php?page=suppliers" class="btn btn-outline-secondary text-start">Manage Suppliers</a>
-                    <a href="/index.php?page=purchase_orders" class="btn btn-outline-primary text-start">Manage Purchase Orders</a>
-                    <a href="/index.php?page=reports" class="btn btn-outline-info text-start">View Reports</a>
+                    <a href="<?= url('inventory') ?>" class="btn btn-outline-primary text-start">Manage Inventory</a>
+                    <a href="<?= url('suppliers') ?>" class="btn btn-outline-secondary text-start">Manage Suppliers</a>
+                    <a href="<?= url('purchase_orders') ?>" class="btn btn-outline-primary text-start">Manage Purchase Orders</a>
+                    <a href="<?= url('reports') ?>" class="btn btn-outline-info text-start">View Reports</a>
                 </div>
             </div>
         </div>
@@ -270,8 +270,8 @@ function dashboardBadgeClass($status)
                     <h5 class="card-title">Request Inventory</h5>
                     <p class="card-text text-muted">Create requests for equipment or inventory items and track your request history.</p>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="/index.php?page=requests&action=create" class="btn btn-success">Create Request</a>
-                        <a href="/index.php?page=requests&action=my" class="btn btn-outline-primary">My Requests</a>
+                        <a href="<?= url('requests', 'create') ?>" class="btn btn-success">Create Request</a>
+                        <a href="<?= url('requests', 'my') ?>" class="btn btn-outline-primary">My Requests</a>
                     </div>
                 </div>
             </div>

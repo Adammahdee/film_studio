@@ -2,7 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once __DIR__ . "/includes/settings_loader.php";
+require_once __DIR__ . "/../../includes/settings_loader.php";
 
 // If maintenance mode is off, or user is admin, redirect back to index
 if (!$maintenance_mode || (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN')) {

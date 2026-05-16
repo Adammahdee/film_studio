@@ -7,14 +7,9 @@ class RoleManager {
      * Use this at the top of your processing scripts/controllers.
      */
     public static function requireRole(string $requiredRole): void {
-        // Ensure a session exists
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-
         // 1. Check if user is even logged in
-        if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role'])) {
-            header('Location: /index.php?page=auth&error=unauthorized');
+        if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+            header('Location: ' . url('auth', null, ['error' => 'unauthorized']));
             exit();
         }
 
@@ -26,7 +21,7 @@ class RoleManager {
             'executive_producer' => 4
         ];
 
-        $userRole = $_SESSION['user_role'];
+        $userRole = $_SESSION['role'];
 
         // If the user's role doesn't exist or is lower than required, block them
         if (!isset($roles[$userRole]) || $roles[$userRole] < $roles[$requiredRole]) {
@@ -34,7 +29,7 @@ class RoleManager {
             error_log("Security Alert: User ID {$_SESSION['user_id']} attempted to access an unauthorized resource requiring role: {$requiredRole}");
             
             // Redirect to dashboard with an error message
-            header('Location: /index.php?page=dashboard&error=forbidden');
+            header('Location: ' . url('dashboard', null, ['error' => 'forbidden']));
             exit();
         }
     }
@@ -43,9 +38,9 @@ class RoleManager {
      * Helper to conditionally show UI buttons/elements based on permissions
      */
     public static function hasAccess(string $minimumRole): bool {
-        if (!isset($_SESSION['user_role'])) return false;
+        if (!isset($_SESSION['role'])) return false;
         
         $roles = ['crew' => 1, 'procurement_officer' => 2, 'line_producer' => 3, 'executive_producer' => 4];
-        return ($roles[$_SESSION['user_role']] ?? 0) >= ($roles[$minimumRole] ?? 0);
+        return ($roles[$_SESSION['role']] ?? 0) >= ($roles[$minimumRole] ?? 0);
     }
 }

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . "/../includes/auth_check.php";
-require_once __DIR__ . "/../config/db.php";
+require_once ROOT_PATH . 'config/db.php';
 
 if ($_SESSION['role'] !== 'ADMIN' && $_SESSION['role'] !== 'MANAGER') {
     die("Access denied");

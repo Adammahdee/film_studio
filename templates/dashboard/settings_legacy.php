@@ -73,7 +73,7 @@ while ($row = $stmt->fetch()) {
                     </div>
                     <hr>
                     <div class="d-flex justify-content-between">
-                        <a href="/index.php?page=dashboard" class="btn btn-secondary">Cancel</a>
+                        <a href="dashboard.php" class="btn btn-secondary">Cancel</a>
                         <button type="submit" class="btn btn-primary">Save Configuration</button>
                     </div>
                 </form>
@@ -86,7 +86,7 @@ while ($row = $stmt->fetch()) {
             </div>
             <div class="card-body">
                 <p>Manage your system data by performing backups or restoring from a previous state.</p>
-                <a href="/index.php?page=backup" class="btn btn-outline-primary">Go to Backup/Restore</a>
+                <a href="backup.php" class="btn btn-outline-primary">Go to Backup/Restore</a>
             </div>
         </div>
     </div>

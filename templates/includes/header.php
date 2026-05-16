@@ -1,0 +1,105 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+// Ensure auth check is run if not already included by the parent page
+require_once __DIR__ . "/auth_check.php";
+require_once __DIR__ . "/settings_loader.php";
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($site_name ?? 'Film Studio') ?> System</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .app-shell {
+            min-height: 100vh;
+        }
+
+        .app-sidebar {
+            width: 260px;
+            background: #1f2937;
+        }
+
+        .app-sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.78);
+            border-radius: 6px;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .app-sidebar .nav-link:hover,
+        .app-sidebar .nav-link:focus {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .app-content {
+            min-width: 0;
+        }
+
+        @media (max-width: 767.98px) {
+            .app-shell {
+                display: block !important;
+            }
+
+            .app-sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-light">
+<div class="app-shell d-flex">
+  <aside class="app-sidebar text-white p-3 p-md-4 shadow-sm">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+      <a class="fs-5 fw-semibold text-white text-decoration-none d-flex align-items-center" href="/index.php?page=dashboard">
+        <?php if (!empty($studio_logo)): ?>
+          <img src="<?= htmlspecialchars($studio_logo) ?>" alt="Logo" class="me-2" style="height: 24px; width: auto; object-fit: contain;">
+        <?php endif; ?>
+        <?= htmlspecialchars($site_name) ?>
+      </a>
+      <span class="badge bg-secondary"><?= htmlspecialchars($_SESSION['role'] ?? '') ?></span>
+    </div>
+
+    <nav class="nav flex-column gap-1">
+      <a class="nav-link" href="/index.php?page=dashboard">Dashboard</a>
+
+      <?php if (isset($_SESSION['role']) && ($_SESSION['role'] === 'ADMIN' || $_SESSION['role'] === 'MANAGER')): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Inventory</div>
+        <a class="nav-link" href="/index.php?page=inventory">View Inventory</a>
+        <a class="nav-link" href="/index.php?page=inventory&action=add">Add Item</a>
+
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Operations</div>
+        <a class="nav-link" href="/index.php?page=suppliers">Suppliers</a>
+        <a class="nav-link" href="/index.php?page=purchase_orders">Purchase Orders</a>
+        <a class="nav-link" href="/index.php?page=purchase_orders&action=create">Create Purchase Order</a>
+
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
+        <a class="nav-link" href="/index.php?page=requests&action=approve">Approve Requests</a>
+        <a class="nav-link" href="/index.php?page=requests">View All Requests</a>
+        <a class="nav-link" href="/index.php?page=reports">Reports</a>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'STAFF'): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Requests</div>
+        <a class="nav-link" href="/index.php?page=requests&action=create">Create Request</a>
+        <a class="nav-link" href="/index.php?page=requests&action=my">My Requests</a>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN'): ?>
+        <div class="mt-3 mb-1 small text-uppercase text-white-50">Administration</div>
+        <a class="nav-link" href="/index.php?page=settings">System Settings</a>
+      <?php endif; ?>
+    </nav>
+
+    <div class="border-top border-secondary mt-4 pt-3">
+      <a href="/index.php?page=profile" class="nav-link px-0 text-white-50">Profile</a>
+      <a href="/index.php?page=auth&action=logout" class="btn btn-outline-light btn-sm w-100 mt-2">Logout</a>
+    </div>
+  </aside>
+
+  <main class="app-content flex-grow-1 p-3 p-md-4">
+    <div class="container-fluid">

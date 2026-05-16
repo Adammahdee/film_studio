@@ -43,12 +43,12 @@ $isLoggedIn = isset($_SESSION['user_id']);
 <body>
 <nav class="navbar navbar-expand-lg bg-white shadow-sm">
     <div class="container">
-        <a class="navbar-brand fw-semibold" href="/film_studio/index.php"><?= htmlspecialchars($site_name) ?></a>
+        <a class="navbar-brand fw-semibold" href="/index.php"><?= htmlspecialchars($site_name) ?></a>
         <div class="d-flex gap-2">
             <?php if ($isLoggedIn): ?>
-                <a href="/film_studio/dashboard.php" class="btn btn-primary">Dashboard</a>
+                <a href="/index.php?page=dashboard" class="btn btn-primary">Dashboard</a>
             <?php else: ?>
-                <a href="/film_studio/auth/login.php" class="btn btn-outline-primary">Login</a>
+                <a href="/index.php?page=auth" class="btn btn-outline-primary">Login</a>
             <?php endif; ?>
         </div>
     </div>
@@ -65,9 +65,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
                     </p>
                     <div class="d-flex gap-2 flex-wrap">
                         <?php if ($isLoggedIn): ?>
-                            <a href="/film_studio/dashboard.php" class="btn btn-light btn-lg">Open Dashboard</a>
+                            <a href="/index.php?page=dashboard" class="btn btn-light btn-lg">Open Dashboard</a>
                         <?php else: ?>
-                            <a href="/film_studio/auth/login.php" class="btn btn-light btn-lg">Login</a>
+                            <a href="/index.php?page=auth" class="btn btn-light btn-lg">Login</a>
                         <?php endif; ?>
                     </div>
                 </div>

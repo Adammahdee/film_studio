@@ -6,7 +6,7 @@ require_once __DIR__ . "/includes/settings_loader.php";
 
 // If maintenance mode is off, or user is admin, redirect back to index
 if (!$maintenance_mode || (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN')) {
-    header("Location: /index.php");
+    header("Location: /film_studio/index.php");
     exit();
 }
 ?>
@@ -32,7 +32,7 @@ if (!$maintenance_mode || (isset($_SESSION['role']) && $_SESSION['role'] === 'AD
             <?= htmlspecialchars($site_name) ?> is currently undergoing scheduled maintenance. 
             We'll be back online shortly. Thank you for your patience!
         </p>
-        <a href="/index.php?page=auth" class="btn btn-outline-primary">Admin Login</a>
+        <a href="/film_studio/auth/login.php" class="btn btn-outline-primary">Admin Login</a>
     </div>
 </body>
 </html>

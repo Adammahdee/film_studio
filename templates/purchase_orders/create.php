@@ -12,7 +12,25 @@ if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
 
 // 2. Fetch data using the centralized $pdo instance (not $conn) as raw arrays
 $suppliers = $pdo->query("SELECT * FROM suppliers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-$items = $pdo->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle legacy/current schema drift: inventory.name vs inventory.item_name
+$nameColumn = 'name';
+try {
+    $colStmt = $pdo->query("SHOW COLUMNS FROM inventory LIKE 'name'");
+    if (!$colStmt->fetch(PDO::FETCH_ASSOC)) {
+        $nameColumn = 'item_name';
+    }
+} catch (PDOException $e) {
+    // Fallback to legacy column name if metadata probe fails
+    $nameColumn = 'item_name';
+}
+
+$itemsSql = sprintf(
+    "SELECT item_id, %s AS display_name, quantity FROM inventory ORDER BY %s ASC",
+    $nameColumn,
+    $nameColumn
+);
+$items = $pdo->query($itemsSql)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -48,7 +66,7 @@ $items = $pdo->query("SELECT * FROM inventory ORDER BY item_name ASC")->fetchAll
                             <option value="">-- Select Item --</option>
                             <?php foreach ($items as $i): ?>
                                 <option value="<?= $i['item_id'] ?>">
-                                    <?= htmlspecialchars($i['item_name']) ?> (Stock: <?= $i['quantity'] ?>)
+                                    <?= htmlspecialchars($i['display_name']) ?> (Stock: <?= $i['quantity'] ?>)
                                 </option>
                             <?php endforeach; ?>
                         </select>

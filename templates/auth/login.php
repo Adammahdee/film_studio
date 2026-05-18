@@ -1,31 +1,42 @@
 <?php
-require_once ROOT_PATH . 'config/db.php';
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+namespace App\Security;
 
-    $name = $_POST['full_name'];
-    $password = $_POST['password'];
+class Session
+{
+    public static function start(): void
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+    }
 
-    $stmt = $conn->prepare("SELECT * FROM users WHERE full_name=?");
-    $stmt->execute([$name]);
-    $user = $stmt->fetch();
+    public static function set(string $key, mixed $value): void
+    {
+        $_SESSION[$key] = $value;
+    }
 
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['user_id'];
-        $_SESSION['role'] = $user['role'];
+    public static function get(string $key, mixed $default = null): mixed
+    {
+        return $_SESSION[$key] ?? $default;
+    }
 
-        header("Location: " . url('dashboard'));
-        exit();
-    } else {
-        echo "Invalid login<br>";
+    public static function destroy(): void
+    {
+        $_SESSION = [];
+        session_destroy();
+    }
+
+    public static function validateCsrfToken(string $token): bool
+    {
+        return isset($_SESSION['_csrf']) && hash_equals($_SESSION['_csrf'], $token);
+    }
+
+    public static function getCsrfToken(): string
+    {
+        if (!isset($_SESSION['_csrf'])) {
+            $_SESSION['_csrf'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['_csrf'];
     }
 }
-?>
-
-<h2>Login</h2>
-
-<form method="POST">
-    <input name="full_name" placeholder="Full Name" required>
-    <input type="password" name="password" placeholder="Password" required>
-    <button type="submit">Login</button>
-</form>

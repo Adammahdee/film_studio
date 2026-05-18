@@ -1,115 +1,413 @@
 <?php
-require_once ROOT_PATH . 'src/Auth/auth_check.php';
-require_once ROOT_PATH . 'config/db.php';
+/**
+ * Request Approval Controller View
+ * Location: templates/requests/approve.php
+ */
 
-if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
-    die("Access denied");
+use App\Core\Csrf;
+use App\Core\ErrorHandler;
+use App\Core\DatabaseTransaction;
+use App\Core\AuditLogger;
+use App\Security\Session;
+
+// Secure session boot
+Session::start();
+
+// Role-based access protection
+$role = $_SESSION['role'] ?? '';
+
+if (!in_array($role, ['ADMIN', 'MANAGER'])) {
+    ErrorHandler::render403();
+    exit();
 }
 
-require_once ROOT_PATH . "templates/includes/header.php";
+$message = '';
+$itemNameColumn = 'name';
+$requestDateExpr = 'r.created_at';
+try {
+    $nameColStmt = $pdo->query("SHOW COLUMNS FROM inventory LIKE 'name'");
+    if (!$nameColStmt->fetch(PDO::FETCH_ASSOC)) {
+        $itemNameColumn = 'item_name';
+    }
+    $dateColStmt = $pdo->query("SHOW COLUMNS FROM requests LIKE 'created_at'");
+    if (!$dateColStmt->fetch(PDO::FETCH_ASSOC)) {
+        $requestDateExpr = 'NULL';
+    }
+} catch (PDOException $e) {
+    $itemNameColumn = 'item_name';
+    $requestDateExpr = 'NULL';
+}
 
-if (isset($_GET['action']) && isset($_GET['id'])) {
+// ---------------------------------------------------
+// Handle Approval / Rejection Actions
+// ---------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $id = $_GET['id'];
-    $action = $_GET['action'];
+    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
 
-    $stmt = $conn->prepare("SELECT * FROM requests WHERE request_id=?");
-    $stmt->execute([$id]);
-    $req = $stmt->fetch();
+        $message = '
+            <div class="alert alert-danger">
+                Invalid security token. Please refresh and try again.
+            </div>
+        ';
 
-    if ($req && $req['status'] == 'PENDING') {
+    } else {
 
-        if ($action == "approve") {
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $decision  = strtoupper(trim($_POST['decision'] ?? ''));
 
-            $stmt = $conn->prepare("SELECT * FROM inventory WHERE item_id=?");
-            $stmt->execute([$req['item_id']]);
-            $item = $stmt->fetch();
+        if ($requestId > 0 && in_array($decision, ['APPROVE', 'REJECT'])) {
 
-            if ($item['quantity'] >= $req['quantity']) {
+            try {
 
-                $newQty = $item['quantity'] - $req['quantity'];
+                DatabaseTransaction::begin();
 
-                if ($newQty < 0) {
-                    die("Stock error");
+                // Lock request row during moderation
+                $requestSql = sprintf("
+                    SELECT 
+                        r.request_id,
+                        r.item_id,
+                        r.quantity,
+                        r.status,
+                        i.%s AS item_name,
+                        i.quantity AS stock_qty
+                    FROM requests r
+                    INNER JOIN inventory i 
+                        ON r.item_id = i.item_id
+                    WHERE r.request_id = ?
+                    FOR UPDATE
+                ", $itemNameColumn);
+                $stmt = $pdo->prepare($requestSql);
+
+                $stmt->execute([$requestId]);
+
+                $request = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$request) {
+                    throw new Exception('Request record not found.');
                 }
 
-                $status = ($newQty > 0) ? 'AVAILABLE' : 'OUT_OF_STOCK';
+                if (strtoupper($request['status']) !== 'PENDING') {
+                    throw new Exception('This request has already been processed.');
+                }
 
-                $conn->prepare("UPDATE inventory SET quantity=?, status=? WHERE item_id=?")
-                     ->execute([$newQty, $status, $req['item_id']]);
+                // ---------------------------------------------------
+                // APPROVE REQUEST
+                // ---------------------------------------------------
+                if ($decision === 'APPROVE') {
 
-                $conn->prepare("UPDATE requests SET status='APPROVED' WHERE request_id=?")
-                     ->execute([$id]);
+                    $requestedQty = (int) $request['quantity'];
+                    $currentStock = (int) $request['stock_qty'];
 
-            } else {
-                echo '<div class="alert alert-danger">Not enough stock</div>';
+                    if ($requestedQty > $currentStock) {
+                        throw new Exception(
+                            'Insufficient stock available for: ' .
+                            htmlspecialchars($request['item_name'])
+                        );
+                    }
+
+                    $newQuantity = $currentStock - $requestedQty;
+
+                    $inventoryStatus = ($newQuantity > 0)
+                        ? 'AVAILABLE'
+                        : 'OUT_OF_STOCK';
+
+                    // Update inventory
+                    $updateInventory = $pdo->prepare("
+                        UPDATE inventory
+                        SET quantity = ?, status = ?
+                        WHERE item_id = ?
+                    ");
+
+                    $updateInventory->execute([
+                        $newQuantity,
+                        $inventoryStatus,
+                        $request['item_id']
+                    ]);
+
+                    // Update request status
+                    $updateRequest = $pdo->prepare("
+                        UPDATE requests
+                        SET status = 'APPROVED'
+                        WHERE request_id = ?
+                    ");
+
+                    $updateRequest->execute([$requestId]);
+
+                    // Audit trail
+                    if (class_exists(AuditLogger::class)) {
+                        AuditLogger::log(
+                            'APPROVE_REQUEST',
+                            'requests',
+                            $requestId,
+                            ['status' => 'PENDING'],
+                            ['status' => 'APPROVED']
+                        );
+                    }
+
+                    $message = '
+                        <div class="alert alert-success">
+                            Request approved successfully.
+                            Inventory balance updated.
+                        </div>
+                    ';
+
+                } else {
+
+                    // ---------------------------------------------------
+                    // REJECT REQUEST
+                    // ---------------------------------------------------
+                    $updateRequest = $pdo->prepare("
+                        UPDATE requests
+                        SET status = 'REJECTED'
+                        WHERE request_id = ?
+                    ");
+
+                    $updateRequest->execute([$requestId]);
+
+                    if (class_exists(AuditLogger::class)) {
+                        AuditLogger::log(
+                            'REJECT_REQUEST',
+                            'requests',
+                            $requestId,
+                            ['status' => 'PENDING'],
+                            ['status' => 'REJECTED']
+                        );
+                    }
+
+                    $message = '
+                        <div class="alert alert-warning">
+                            Request rejected successfully.
+                        </div>
+                    ';
+                }
+
+                DatabaseTransaction::commit();
+
+            } catch (Exception $e) {
+
+                DatabaseTransaction::rollback();
+
+                $message = '
+                    <div class="alert alert-danger">
+                        Processing failed: ' .
+                        htmlspecialchars($e->getMessage()) .
+                    '</div>
+                ';
             }
-
-        } elseif ($action == "reject") {
-
-            $conn->prepare("UPDATE requests SET status='REJECTED' WHERE request_id=?")
-                 ->execute([$id]);
         }
     }
 }
 
-$stmt = $conn->query("SELECT r.*, u.full_name, i.item_name
-                      FROM requests r
-                      JOIN users u ON r.user_id = u.user_id
-                      JOIN inventory i ON r.item_id = i.item_id
-                      ORDER BY r.request_id DESC");
+// ---------------------------------------------------
+// Load Pending Requests
+// ---------------------------------------------------
+try {
 
-$requests = $stmt->fetchAll();
+    $pendingSql = sprintf("
+        SELECT
+            r.request_id,
+            r.quantity,
+            %s AS created_at,
+            COALESCE(u.full_name, 'Unknown User') AS full_name,
+            COALESCE(i.%s, 'Unknown Item') AS item_name,
+            COALESCE(i.quantity, 0) AS stock_qty
+        FROM requests r
+        LEFT JOIN users u
+            ON r.user_id = u.user_id
+        LEFT JOIN inventory i
+            ON r.item_id = i.item_id
+        WHERE UPPER(r.status) = 'PENDING'
+        ORDER BY r.request_id ASC
+    ", $requestDateExpr, $itemNameColumn);
+    $pendingStmt = $pdo->query($pendingSql);
+
+    $pendingRequests = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+} catch (PDOException $e) {
+
+    error_log('Pending Request Query Error: ' . $e->getMessage());
+
+    $pendingRequests = [];
+}
 ?>
 
-<h2 class="mb-4">Approval System</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Approve Pending Requests</h2>
+        <p class="text-muted mb-0">
+            Review and moderate inventory allocation requests.
+        </p>
+    </div>
 
-<div class="card shadow-sm">
+    <a href="<?= url('requests') ?>" class="btn btn-outline-secondary">
+        View All Requests
+    </a>
+</div>
+
+<?= $message ?>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-dark text-white">
+        Pending Request Queue
+    </div>
+
     <div class="card-body p-0">
-        <table class="table table-striped table-hover table-bordered mb-0">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($requests as $r): ?>
-                <tr>
-                    <td><?= $r['request_id'] ?></td>
-                    <td><?= $r['full_name'] ?></td>
-                    <td><?= $r['item_name'] ?></td>
-                    <td><?= $r['quantity'] ?></td>
-                    <td>
-                        <?php
-                            $badge = 'bg-secondary';
-                            if($r['status'] == 'PENDING') $badge = 'bg-warning text-dark';
-                            if($r['status'] == 'APPROVED') $badge = 'bg-success';
-                            if($r['status'] == 'REJECTED') $badge = 'bg-danger';
-                        ?>
-                        <span class="badge <?= $badge ?>"><?= $r['status'] ?></span>
-                    </td>
-                    <td>
-                        <?php if ($r['status'] == 'PENDING'): ?>
-                            <a href="<?= url('requests', 'approve', ['action_type' => 'approve', 'id' => $r['request_id']]) ?>" class="btn btn-success btn-sm">Approve</a>
-                            <a href="<?= url('requests', 'approve', ['action_type' => 'reject', 'id' => $r['request_id']]) ?>" class="btn btn-danger btn-sm">Reject</a>
-                        <?php else: ?>
-                            <span class="text-muted">Done</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Request ID</th>
+                        <th>Requester</th>
+                        <th>Inventory Item</th>
+                        <th class="text-center">Requested Qty</th>
+                        <th class="text-center">Available Stock</th>
+                        <th>Date Submitted</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    <?php if (empty($pendingRequests)): ?>
+
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                No pending requests found.
+                            </td>
+                        </tr>
+
+                    <?php else: ?>
+
+                        <?php foreach ($pendingRequests as $request): ?>
+
+                            <tr>
+
+                                <td>
+                                    #<?= htmlspecialchars($request['request_id']) ?>
+                                </td>
+
+                                <td class="fw-semibold">
+                                    <?= htmlspecialchars($request['full_name']) ?>
+                                </td>
+
+                                <td>
+                                    <?= htmlspecialchars($request['item_name']) ?>
+                                </td>
+
+                                <td class="text-center fw-bold text-primary">
+                                    <?= (int) $request['quantity'] ?>
+                                </td>
+
+                                <td class="text-center">
+
+                                    <span class="badge <?= ($request['stock_qty'] >= $request['quantity'])
+                                        ? 'bg-success'
+                                        : 'bg-danger'
+                                    ?>">
+
+                                        <?= (int) $request['stock_qty'] ?> available
+
+                                    </span>
+
+                                </td>
+
+                                <td class="text-muted small">
+                                    <?= htmlspecialchars((string)($request['created_at'] ?? 'N/A')) ?>
+                                </td>
+
+                                <td class="text-end pe-4">
+
+                                    <div class="d-flex justify-content-end gap-2">
+
+                                        <!-- APPROVE -->
+                                        <form method="POST">
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="<?= Csrf::generateToken() ?>"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="request_id"
+                                                value="<?= $request['request_id'] ?>"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="decision"
+                                                value="APPROVE"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-success"
+                                                <?= ($request['stock_qty'] < $request['quantity'])
+                                                    ? 'disabled'
+                                                    : ''
+                                                ?>
+                                            >
+                                                Approve
+                                            </button>
+
+                                        </form>
+
+                                        <!-- REJECT -->
+                                        <form method="POST">
+
+                                            <input
+                                                type="hidden"
+                                                name="csrf_token"
+                                                value="<?= Csrf::generateToken() ?>"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="request_id"
+                                                value="<?= $request['request_id'] ?>"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="decision"
+                                                value="REJECT"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-danger"
+                                            >
+                                                Reject
+                                            </button>
+
+                                        </form>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
     </div>
 </div>
 
-<div class="mt-3">
-    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
+<div class="mt-4">
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">
+        Return to Dashboard
+    </a>
 </div>
-
-<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

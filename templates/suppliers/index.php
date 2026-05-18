@@ -1,130 +1,108 @@
 <?php
+use App\Core\ErrorHandler;
 use App\Core\Csrf;
-use App\Validation\SupplierValidator;
-use App\Core\DatabaseTransaction;
-use App\Services\AuditLogger;
 
-require_once ROOT_PATH . 'config/db.php';
-
-// ROLE CHECK
-if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
-    die("Access denied");
-}
-// This will be replaced by Permissions::hasPermission later
-
-require_once ROOT_PATH . "templates/includes/header.php";
-
-// HANDLE FORM SUBMISSION
-$msg = "";
-$errors = [];
-$formData = []; // To retain form data on error
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
-        $msg = '<div class="alert alert-danger">Invalid CSRF token. Please try again.</div>';
-        error_log("CSRF attack detected on add supplier form from IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
-    } else {
-        $formData = [
-            'name'           => trim($_POST['name'] ?? ''),
-            'contact_person' => trim($_POST['contact_person'] ?? ''),
-            'phone'          => trim($_POST['phone'] ?? ''),
-            'email'          => trim($_POST['email'] ?? '')
-        ];
-
-        $errors = SupplierValidator::validateSupplier($formData);
-
-        if (empty($errors)) {
-            try {
-                DatabaseTransaction::begin();
-                $stmt = $conn->prepare("INSERT INTO suppliers (name, contact_person, phone, email) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$formData['name'], $formData['contact_person'], $formData['phone'], $formData['email']]);
-                AuditLogger::log('CREATE', 'Suppliers', (int)$conn->lastInsertId(), null, $formData);
-                DatabaseTransaction::commit();
-                $msg = '<div class="alert alert-success">Supplier added successfully</div>';
-            } catch (PDOException $e) {
-                DatabaseTransaction::rollback();
-                $msg = '<div class="alert alert-danger">Error adding supplier: ' . htmlspecialchars($e->getMessage()) . '</div>';
-            }
-        } else {
-            $msg = '<div class="alert alert-danger">Please correct the errors below.</div>';
-        }
-    }
+// Access control layer: Restricted to corporate administrative and logistics personnel
+$role = $_SESSION['role'] ?? '';
+if ($role !== 'ADMIN' && $role !== 'MANAGER') {
+    ErrorHandler::render403();
+    exit();
 }
 
-// FETCH SUPPLIERS
-$suppliers = $conn->query("
-    SELECT * FROM suppliers
-    ORDER BY supplier_id DESC
-")->fetchAll();
+try {
+    // Extract supplier entities alongside calculated aggregate total of past purchase order fills
+    $stmt = $pdo->query("
+        SELECT s.*, 
+        (SELECT COUNT(*) FROM purchase_orders po WHERE po.supplier_id = s.supplier_id) AS total_orders
+        FROM suppliers s
+        ORDER BY s.name ASC
+    ");
+    $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Supplier index repository query exception: " . $e->getMessage());
+    $suppliers = [];
+}
 ?>
 
-<h2 class="mb-4">Suppliers</h2>
-
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-primary text-white">Add New Supplier</div>
-    <div class="card-body">
-        <?= $msg ?>
-        <form method="POST" class="row g-3">
-            <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
-            <div class="col-md-3">
-                <input type="text" name="name" class="form-control <?= isset($errors['name']) ? 'is-invalid' : '' ?>" placeholder="Supplier Name" value="<?= htmlspecialchars($formData['name'] ?? '') ?>" required>
-                <?php if (isset($errors['name'])): ?><div class="invalid-feedback"><?= $errors['name'] ?></div><?php endif; ?>
-            </div>
-            <div class="col-md-3">
-                <input type="text" name="contact_person" class="form-control <?= isset($errors['contact_person']) ? 'is-invalid' : '' ?>" placeholder="Contact Person" value="<?= htmlspecialchars($formData['contact_person'] ?? '') ?>" required>
-                <?php if (isset($errors['contact_person'])): ?><div class="invalid-feedback"><?= $errors['contact_person'] ?></div><?php endif; ?>
-            </div>
-            <div class="col-md-3">
-                <input type="text" name="phone" class="form-control <?= isset($errors['phone']) ? 'is-invalid' : '' ?>" placeholder="Phone" value="<?= htmlspecialchars($formData['phone'] ?? '') ?>" required>
-                <?php if (isset($errors['phone'])): ?><div class="invalid-feedback"><?= $errors['phone'] ?></div><?php endif; ?>
-            </div>
-            <div class="col-md-3">
-                <input type="email" name="email" class="form-control <?= isset($errors['email']) ? 'is-invalid' : '' ?>" placeholder="Email" value="<?= htmlspecialchars($formData['email'] ?? '') ?>">
-                <?php if (isset($errors['email'])): ?><div class="invalid-feedback"><?= $errors['email'] ?></div><?php endif; ?>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-success">Add Supplier</button>
-            </div>
-        </form>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+        <h2>External Suppliers & Vendors</h2>
+        <p class="text-muted mb-0">Manage global sourcing channels, procurement links, and manufacturing contracts.</p>
+    </div>
+    <div>
+        <a href="<?= url('suppliers', 'create') ?>" class="btn btn-primary">
+            <i class="bi bi-person-plus me-1"></i> Register New Supplier
+        </a>
     </div>
 </div>
 
+<?php if (isset($_SESSION['success_msg'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?= htmlspecialchars($_SESSION['success_msg']); unset($_SESSION['success_msg']); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
 <div class="card shadow-sm">
-    <table class="table table-striped table-hover table-bordered mb-0">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Contact Person</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($suppliers as $s): ?>
-            <tr>
-                <td><?= $s['supplier_id'] ?></td>
-                <td><?= htmlspecialchars($s['name'] ?? '') ?></td>
-                <td><?= htmlspecialchars($s['contact_person'] ?? '') ?></td>
-                <td><?= htmlspecialchars($s['phone'] ?? '') ?></td>
-                <td><?= htmlspecialchars($s['email'] ?? '') ?></td>
-                <td>
-                    <a href="<?= url('suppliers', 'edit', ['id' => $s['supplier_id']]) ?>" class="btn btn-warning btn-sm">Edit</a>
-                    <form action="<?= url('suppliers', 'delete') ?>" method="POST" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
-                        <input type="hidden" name="supplier_name" value="<?= htmlspecialchars($s['name']) ?>"> <!-- For logging -->
-                        <input type="hidden" name="id" value="<?= $s['supplier_id'] ?>">
-                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this supplier?');">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Company Name</th>
+                    <th>Contact Person</th>
+                    <th>Email Address</th>
+                    <th>Phone Line</th>
+                    <th class="text-center">Procurements Logged</th>
+                    <th class="text-end px-4">Management Controls</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($suppliers)): ?>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            No registered external suppliers or production vendors located.
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                <?php foreach ($suppliers as $s): ?>
+                <tr>
+                    <td><span class="text-mono fw-semibold">#<?= htmlspecialchars($s['supplier_id']) ?></span></td>
+                    <td class="fw-bold text-dark"><?= htmlspecialchars($s['name']) ?></td>
+                    <td><?= htmlspecialchars($s['contact_name'] ?? $s['contact_person'] ?? 'N/A') ?></td>
+                    <td>
+                        <a href="mailto:<?= htmlspecialchars($s['email']) ?>" class="text-decoration-none">
+                            <?= htmlspecialchars($s['email']) ?>
+                        </a>
+                    </td>
+                    <td><span class="text-nowrap"><?= htmlspecialchars($s['phone'] ?? 'N/A') ?></span></td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border">
+                            <?= (int)$s['total_orders'] ?> orders
+                        </span>
+                    </td>
+                    <td class="text-end px-4">
+                        <div class="d-flex justify-content-end gap-1">
+                            <a href="<?= url('suppliers', 'edit', ['id' => $s['supplier_id']]) ?>" class="btn btn-sm btn-outline-secondary py-1">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            
+                            <form action="<?= url('suppliers', 'delete') ?>" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to drop this supplier profile from the active tracking index?');">
+                                <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
+                                <input type="hidden" name="id" value="<?= $s['supplier_id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-1">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div class="mt-3">
-    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Back</a>
+    <a href="<?= url('dashboard') ?>" class="btn btn-secondary">Return to Live Overview Terminal</a>
 </div>
-
-<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

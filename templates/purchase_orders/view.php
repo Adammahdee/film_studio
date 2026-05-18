@@ -1,77 +1,200 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
-require_once ROOT_PATH . 'config/db.php';
 
-if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
-    die("Access denied");
+use App\Core\ErrorHandler;
+use App\Security\Session;
+
+// Secure session start
+Session::start();
+
+// Authentication check
+if (!isset($_SESSION['user_id'])) {
+    header("Location: " . url('auth'));
+    exit();
 }
 
-require_once __DIR__ . "/../includes/header.php";
+// Role access control
+if (!in_array($_SESSION['role'] ?? '', ['ADMIN', 'MANAGER'])) {
+    ErrorHandler::render403("Access denied.");
+    exit();
+}
 
-$id = $_GET['id'] ?? 0;
+// Validate purchase order ID
+$id = (int)($_GET['id'] ?? 0);
 
-// Get order
-$stmt = $conn->prepare("
-    SELECT po.*, s.name AS supplier_name
+if ($id <= 0) {
+    ErrorHandler::render404("Invalid purchase order ID.");
+    exit();
+}
+
+// Fetch purchase order details
+$stmt = $pdo->prepare("
+    SELECT 
+        po.purchase_order_id,
+        po.status,
+        po.total_amount,
+        po.order_date,
+        s.name AS supplier_name
     FROM purchase_orders po
-    JOIN suppliers s ON po.supplier_id = s.supplier_id
-    WHERE po.po_id = ?
+    JOIN suppliers s 
+        ON po.supplier_id = s.supplier_id
+    WHERE po.purchase_order_id = ?
 ");
+
 $stmt->execute([$id]);
+
 $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Get order items
-$stmt = $conn->prepare("
-    SELECT poi.*, i.item_name
+if (!$order) {
+    ErrorHandler::render404("Purchase order not found.");
+    exit();
+}
+
+// Fetch purchase order items
+// Support both schemas: inventory.name and inventory.item_name
+$inventoryNameColumn = 'name';
+$invNameStmt = $pdo->query("SHOW COLUMNS FROM inventory LIKE 'name'");
+if (!$invNameStmt->fetch(PDO::FETCH_ASSOC)) {
+    $inventoryNameColumn = 'item_name';
+}
+
+$itemSql = sprintf("
+    SELECT 
+        poi.quantity,
+        poi.unit_price,
+        i.%s AS item_name
     FROM purchase_order_items poi
-    JOIN inventory i ON poi.inventory_id = i.item_id
-    WHERE poi.po_id = ?
-");
-$stmt->execute([$id]);
-$items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    JOIN inventory i 
+        ON poi.item_id = i.item_id
+    WHERE poi.purchase_order_id = ?
+", $inventoryNameColumn);
+$itemStmt = $pdo->prepare($itemSql);
+
+$itemStmt->execute([$id]);
+
+$items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Order #<?= htmlspecialchars($id) ?></h2>
-    <a href="index.php" class="btn btn-secondary">Back</a>
-</div>
+<div class="container my-5">
 
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <p class="mb-1"><strong>Supplier:</strong> <?= htmlspecialchars($order['supplier_name'] ?? 'N/A') ?></p>
-        <p class="mb-0"><strong>Status:</strong> 
-            <?php 
-                $badge = 'bg-secondary';
-                if (($order['status'] ?? '') == 'PENDING') $badge = 'bg-warning text-dark';
-                if (($order['status'] ?? '') == 'RECEIVED') $badge = 'bg-success';
-            ?>
-            <span class="badge <?= $badge ?>"><?= htmlspecialchars($order['status'] ?? 'N/A') ?></span>
-        </p>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            Purchase Order #<?= htmlspecialchars($order['purchase_order_id']) ?>
+        </h2>
+
+        <a href="<?= url('purchase_orders') ?>" class="btn btn-secondary">
+            Back
+        </a>
     </div>
-</div>
 
-<div class="card shadow-sm">
-    <div class="card-header bg-primary text-white">Order Items</div>
-    <div class="card-body p-0">
-        <table class="table table-striped table-hover table-bordered mb-0">
-            <thead class="table-dark">
-                <tr>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($items as $item): ?>
-                <tr>
-                    <td><?= htmlspecialchars($item['item_name']) ?></td>
-                    <td><?= $item['quantity'] ?></td>
-                    <td><?= $item['unit_price'] ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-md-6">
+                    <strong>Supplier:</strong><br>
+                    <?= htmlspecialchars($order['supplier_name']) ?>
+                </div>
+
+                <div class="col-md-3">
+                    <strong>Status:</strong><br>
+
+                    <?php
+                    $badge = 'bg-secondary';
+
+                    if ($order['status'] === 'PENDING') {
+                        $badge = 'bg-warning text-dark';
+                    } elseif ($order['status'] === 'RECEIVED') {
+                        $badge = 'bg-success';
+                    }
+                    ?>
+
+                    <span class="badge <?= $badge ?>">
+                        <?= htmlspecialchars($order['status']) ?>
+                    </span>
+                </div>
+
+                <div class="col-md-3">
+                    <strong>Order Date:</strong><br>
+                    <?= htmlspecialchars(date('M d, Y H:i', strtotime($order['order_date']))) ?>
+                </div>
+
+                <div class="col-md-12">
+                    <strong>Total Amount:</strong><br>
+                    $<?= number_format((float)$order['total_amount'], 2) ?>
+                </div>
+
+            </div>
+
+        </div>
     </div>
-</div>
 
-<?php require_once __DIR__ . "/../includes/footer.php"; ?>
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            Order Items
+        </div>
+
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+
+                <table class="table table-striped table-hover align-middle mb-0">
+
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Line Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        <?php if (empty($items)): ?>
+
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    No order items found.
+                                </td>
+                            </tr>
+
+                        <?php else: ?>
+
+                            <?php foreach ($items as $item): ?>
+
+                                <tr>
+                                    <td>
+                                        <?= htmlspecialchars($item['item_name']) ?>
+                                    </td>
+
+                                    <td>
+                                        <?= (int)$item['quantity'] ?>
+                                    </td>
+
+                                    <td>
+                                        $<?= number_format((float)$item['unit_price'], 2) ?>
+                                    </td>
+
+                                    <td>
+                                        $<?= number_format(
+                                            $item['quantity'] * $item['unit_price'],
+                                            2
+                                        ) ?>
+                                    </td>
+                                </tr>
+
+                            <?php endforeach; ?>
+
+                        <?php endif; ?>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>

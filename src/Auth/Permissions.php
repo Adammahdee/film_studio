@@ -6,9 +6,13 @@ class Permissions
 {
     // Define roles and their hierarchy (higher number means more permissions)
     private const ROLE_HIERARCHY = [
-        'STAFF'   => 1,
-        'MANAGER' => 2,
-        'ADMIN'   => 3,
+        'crew'                => 1,
+        'STAFF'               => 1, // Kept for legacy compatibility
+        'procurement_officer' => 2,
+        'line_producer'       => 3,
+        'MANAGER'             => 3, // Kept for legacy compatibility
+        'executive_producer'  => 4,
+        'ADMIN'               => 5,
     ];
 
     // Define permissions and which roles possess them
@@ -23,12 +27,38 @@ class Permissions
             'system_settings',
             'backup_restore',
         ],
+        'executive_producer' => [
+            'manage_inventory',
+            'approve_request',
+            'receive_goods',
+            'view_reports',
+            'manage_suppliers',
+            'create_request',
+            'view_my_requests',
+        ],
         'MANAGER' => [
             'manage_inventory',
             'approve_request',
             'receive_goods',
             'view_reports',
             'manage_suppliers',
+        ],
+        'line_producer' => [
+            'manage_inventory',
+            'approve_request',
+            'create_request',
+            'view_my_requests',
+        ],
+        'procurement_officer' => [
+            'manage_inventory',
+            'receive_goods',
+            'manage_suppliers',
+            'create_request',
+            'view_my_requests',
+        ],
+        'crew' => [
+            'create_request',
+            'view_my_requests',
         ],
         'STAFF' => [
             'create_request',
@@ -39,7 +69,7 @@ class Permissions
     /**
      * Checks if a given role has a specific permission.
      *
-     * @param string $userRole The role of the currently logged-in user (e.g., 'ADMIN', 'MANAGER').
+     * @param string $userRole The role of the currently logged-in user (e.g., 'ADMIN', 'crew').
      * @param string $permission The permission to check (e.g., 'manage_inventory').
      * @return bool True if the role has the permission, false otherwise.
      */
@@ -54,11 +84,6 @@ class Permissions
         if (isset(self::ROLE_PERMISSIONS[$userRole]) && in_array($permission, self::ROLE_PERMISSIONS[$userRole])) {
             return true;
         }
-
-        // For roles with a hierarchy, check if a higher role implicitly grants the permission
-        // This is useful if a permission is only defined for ADMIN, but MANAGER should also have it.
-        // However, with explicit ROLE_PERMISSIONS, this might be less necessary.
-        // For now, we rely on explicit definition.
 
         return false;
     }

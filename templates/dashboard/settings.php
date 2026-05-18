@@ -2,25 +2,22 @@
 use App\Core\Csrf;
 use App\Auth\Permissions;
 use App\Core\ErrorHandler;
-use App\Services\AuditLogger;
+use App\Core\AuditLogger;
 use App\Core\DatabaseTransaction;
-require_once ROOT_PATH . "src/Auth/auth_check.php";
-require_once ROOT_PATH . "templates/includes/header.php";
 
-// Fetch user role to ensure only admins have access
-$user_id = $_SESSION['user_id'];
-// Use Permissions helper for access control
-if (!Permissions::hasPermission($_SESSION['role'] ?? '', 'system_settings')) {
-    // For now, just die. Later, use ErrorHandler::render403()
-    die('<div class="alert alert-danger">Access Denied. You do not have permission to view system settings.</div>');
-    // require_once ROOT_PATH . "templates/includes/footer.php"; // This line was problematic with die()
+// Fetch user identity metrics to run access permission verification
+$user_id = $_SESSION['user_id'] ?? null;
+
+if (!$user_id || !Permissions::hasPermission($_SESSION['role'] ?? '', 'system_settings')) {
+    // Upgraded from hardcoded die() to your professional centralized framework component
+    ErrorHandler::render403();
     exit();
 }
 
 $msg = "";
 
 // Handle Settings Update
-if ($_SERVER['REQUEST_METHOD'] === 'POST') { // This will be replaced by Permissions::hasPermission later
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
         $msg = '<div class="alert alert-danger">Invalid CSRF token. Please try again.</div>';
         error_log("CSRF attack detected on settings form from IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
@@ -28,17 +25,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') { // This will be replaced by Permiss
         try {
             DatabaseTransaction::begin();
             $oldSettings = [];
-            foreach ($_POST['settings'] as $key => $value) {
-                // Fetch old value for logging
-                $oldStmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
-                $oldStmt->execute([$key]);
-                $oldSettings[$key] = $oldStmt->fetchColumn();
-                $stmt = $conn->prepare("REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
-                $stmt->execute([$key, trim($value)]);
+            
+            if (isset($_POST['settings']) && is_array($_POST['settings'])) {
+                foreach ($_POST['settings'] as $key => $value) {
+                    // Swapped $conn for global $pdo reference
+                    $oldStmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
+                    $oldStmt->execute([$key]);
+                    $oldSettings[$key] = $oldStmt->fetchColumn();
+                    
+                    $stmt = $pdo->prepare("REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
+                    $stmt->execute([$key, trim($value)]);
+                }
+                
+                AuditLogger::log('UPDATE', 'System Settings', null, $oldSettings, $_POST['settings']);
+                DatabaseTransaction::commit();
+                $msg = '<div class="alert alert-success">Settings updated successfully.</div>';
             }
-            AuditLogger::log('UPDATE', 'System Settings', null, $oldSettings, $_POST['settings']);
-            DatabaseTransaction::commit();
-            $msg = '<div class="alert alert-success">Settings updated successfully.</div>';
         } catch (PDOException $e) {
             DatabaseTransaction::rollback();
             $msg = '<div class="alert alert-danger">Error updating settings: ' . htmlspecialchars($e->getMessage()) . '</div>';
@@ -46,10 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') { // This will be replaced by Permiss
     }
 }
 
-// Fetch Current Settings
+// Fetch Current Settings using $pdo
 $settings = [];
-$stmt = $conn->query("SELECT * FROM settings");
-while ($row = $stmt->fetch()) {
+$stmt = $pdo->query("SELECT * FROM settings");
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $settings[$row['setting_key']] = $row['setting_value'];
 }
 ?>
@@ -108,5 +110,3 @@ while ($row = $stmt->fetch()) {
         </div>
     </div>
 </div>
-
-<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

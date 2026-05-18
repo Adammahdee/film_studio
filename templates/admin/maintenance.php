@@ -1,15 +1,23 @@
 <?php
 
-// Settings loader (config layer)
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once ROOT_PATH . "templates/includes/settings_loader.php";
 
-// Ensure session exists (should already be handled by front controller)
-$role = $_SESSION['role'] ?? null;
+$is_maintenance = $settings['maintenance_mode'] ?? false;
+$site_name = $settings['site_name'] ?? 'Film Studio';
 
-// Maintenance bypass rule:
-// - If maintenance is OFF → redirect to dashboard
-// - If user is ADMIN → allow access
-if (!$maintenance_mode || $role === 'ADMIN') {
+$role = $_SESSION['role'] ?? '';
+
+/**
+ * Redirect out of maintenance page when not needed
+ */
+if (
+    !$is_maintenance ||
+    $role === 'ADMIN'
+) {
     header("Location: " . url('dashboard'));
     exit();
 }
@@ -20,7 +28,7 @@ if (!$maintenance_mode || $role === 'ADMIN') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance - <?= htmlspecialchars($site_name ?? 'System') ?></title>
+    <title>Maintenance Mode - <?= htmlspecialchars($site_name) ?></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -51,8 +59,8 @@ if (!$maintenance_mode || $role === 'ADMIN') {
     <h2 class="mb-3">Under Maintenance</h2>
 
     <p class="text-muted mb-4">
-        <?= htmlspecialchars($site_name ?? 'System') ?> is currently under maintenance.
-        Service will resume shortly.
+        <?= htmlspecialchars($site_name) ?> is currently under maintenance.
+        Please try again later.
     </p>
 
     <a href="<?= url('auth') ?>" class="btn btn-outline-primary">

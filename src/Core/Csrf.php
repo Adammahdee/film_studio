@@ -27,12 +27,10 @@ class Csrf
      */
     public static function validateToken(string $submittedToken): bool
     {
-        if (empty($_SESSION[self::TOKEN_NAME]) || !hash_equals($_SESSION[self::TOKEN_NAME], $submittedToken)) {
+        if (empty($_SESSION[self::TOKEN_NAME])) {
             return false;
         }
-        // Token is valid, regenerate it to prevent "replay" attacks
-        self::regenerateToken();
-        return true;
+        return hash_equals($_SESSION[self::TOKEN_NAME], $submittedToken);
     }
 
     /**

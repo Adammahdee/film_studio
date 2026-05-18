@@ -1,9 +1,25 @@
 <?php
 // config/db.php
 
-$conn = new PDO("mysql:host=localhost;dbname=film_studio", "root", "");
-$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+// Standard Laragon local credentials
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'film_studio');
+define('DB_USER', 'root');
+define('DB_PASS', '');
 
-// Alias the variable so both old and new code structures work interchangeably!
-$pdo = &$conn; 
-?>
+try {
+    // Establish a unified PDO instantiation instance with strict security settings
+    $pdo = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false, // Enforces true prepared statements for maximum security
+        ]
+    );
+} catch (PDOException $e) {
+    // If database connection hits a wall, halt immediately and show clear reason
+    die("Database Connection Failure: " . $e->getMessage());
+}

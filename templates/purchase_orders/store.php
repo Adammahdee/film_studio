@@ -1,85 +1,185 @@
 <?php
-require_once __DIR__ . "/../includes/auth_check.php";
-require_once ROOT_PATH . 'config/db.php';
 
-if ($_SESSION['role'] !== 'ADMIN' && $_SESSION['role'] !== 'MANAGER') {
-    die("Access denied");
+use App\Security\Session;
+
+// Ensure secure session is active
+Session::start();
+
+// Authentication protection
+if (!isset($_SESSION['user_id'])) {
+    header("Location: " . url('auth'));
+    exit();
 }
 
-if (!isset($_POST['supplier_id'])) {
-    die("Invalid request");
+// Authorization protection
+if (!in_array($_SESSION['role'] ?? '', ['ADMIN', 'MANAGER'])) {
+    header("Location: " . url('purchase_orders', null, [
+        'error' => 'Unauthorized access.'
+    ]));
+    exit();
 }
 
-$conn->beginTransaction();
+// Only allow POST requests
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: " . url('purchase_orders', 'create'));
+    exit();
+}
+
+// Validate input
+$supplier_id = filter_input(INPUT_POST, 'supplier_id', FILTER_VALIDATE_INT);
+
+$save_mode = strtoupper(trim($_POST['save_mode'] ?? 'PENDING'));
+if (!in_array($save_mode, ['PENDING', 'RECEIVED'], true)) {
+    header("Location: " . url('purchase_orders', 'create', [
+        'error' => 'Invalid purchase order status.'
+    ]));
+    exit();
+}
+
+$inventory_ids = $_POST['inventory_id'] ?? [];
+$quantities = $_POST['quantity'] ?? [];
+$prices = $_POST['price'] ?? [];
+
+if (
+    !$supplier_id ||
+    empty($inventory_ids) ||
+    count($inventory_ids) !== count($quantities) ||
+    count($inventory_ids) !== count($prices)
+) {
+    header("Location: " . url('purchase_orders', 'create', [
+        'error' => 'Invalid purchase order data.'
+    ]));
+    exit();
+}
 
 try {
-    $supplier_id = (int) $_POST['supplier_id'];
-    $user_id = (int) $_SESSION['user_id'];
-    $save_mode = $_POST['save_mode'] ?? 'pending';
-    $po_status = $save_mode === 'received' ? 'RECEIVED' : 'PENDING';
-    $inventory_ids = $_POST['inventory_id'] ?? [];
-    $quantities = $_POST['quantity'] ?? [];
-    $prices = $_POST['price'] ?? [];
 
-    if ($supplier_id <= 0) {
-        throw new Exception("Supplier is required.");
-    }
+    $pdo->beginTransaction();
 
-    if (!$inventory_ids || !$quantities || !$prices) {
-        throw new Exception("At least one item is required.");
-    }
+    // Calculate total amount
+    $total_amount = 0;
 
-    $stmt = $conn->prepare("
-        INSERT INTO purchase_orders (supplier_id, created_by, status)
-        VALUES (?, ?, ?)
-    ");
-    $stmt->execute([$supplier_id, $user_id, $po_status]);
+    foreach ($inventory_ids as $index => $inventory_id) {
 
-    $po_id = $conn->lastInsertId();
-    $has_items = false;
-
-    foreach ($inventory_ids as $index => $inv_id) {
-        $inv_id = (int) $inv_id;
         $qty = (int) ($quantities[$index] ?? 0);
-        $price = (float) ($prices[$index] ?? 0);
+        $unit_price = (float) ($prices[$index] ?? 0);
 
-        if ($inv_id <= 0 || $qty <= 0) {
-            continue;
+        if ($qty <= 0 || $unit_price < 0) {
+            throw new Exception('Invalid quantity or price detected.');
         }
 
-        if ($price < 0) {
-            throw new Exception("Unit price cannot be negative.");
+        $total_amount += ($qty * $unit_price);
+    }
+
+    // Create purchase order
+    $purchaseOrderStmt = $pdo->prepare("
+        INSERT INTO purchase_orders (
+            supplier_id,
+            total_amount,
+            status,
+            created_by,
+            order_date
+        )
+        VALUES (
+            :supplier_id,
+            :total_amount,
+            :status,
+            :created_by,
+            NOW()
+        )
+    ");
+
+    $purchaseOrderStmt->execute([
+        ':supplier_id' => $supplier_id,
+        ':total_amount' => $total_amount,
+        ':status' => $save_mode,
+        ':created_by' => $_SESSION['user_id']
+    ]);
+
+    $purchase_order_id = $pdo->lastInsertId();
+
+    // Prepare statements
+    $itemStmt = $pdo->prepare("
+        INSERT INTO purchase_order_items (
+            purchase_order_id,
+            item_id,
+            quantity,
+            unit_price
+        )
+        VALUES (
+            :purchase_order_id,
+            :item_id,
+            :quantity,
+            :unit_price
+        )
+    ");
+
+    $stockStmt = $pdo->prepare("
+        UPDATE inventory
+        SET quantity = quantity + :quantity,
+            status = CASE
+                WHEN (quantity + :quantity) > 0 THEN 'AVAILABLE'
+                ELSE 'OUT_OF_STOCK'
+            END
+        WHERE item_id = :item_id
+    ");
+
+    // Save all PO items
+    $insertedItems = 0;
+    foreach ($inventory_ids as $index => $inventory_id) {
+
+        $item_id = (int) $inventory_id;
+        $qty = (int) ($quantities[$index] ?? 0);
+        $unit_price = (float) ($prices[$index] ?? 0);
+
+        if ($item_id <= 0 || $qty <= 0 || $unit_price < 0) {
+            throw new Exception('Invalid item data detected.');
         }
 
-        $has_items = true;
+        // Insert PO item
+        $itemStmt->execute([
+            ':purchase_order_id' => $purchase_order_id,
+            ':item_id' => $item_id,
+            ':quantity' => $qty,
+            ':unit_price' => $unit_price
+        ]);
+        $insertedItems++;
 
-        $stmt = $conn->prepare("
-            INSERT INTO purchase_order_items (po_id, inventory_id, quantity, unit_price)
-            VALUES (?, ?, ?, ?)
-        ");
-        $stmt->execute([$po_id, $inv_id, $qty, $price]);
+        // Auto update inventory if directly received
+        if ($save_mode === 'RECEIVED') {
 
-        if ($po_status === 'RECEIVED') {
-            $updateStmt = $conn->prepare("
-                UPDATE inventory
-                SET quantity = quantity + ?,
-                    status = 'AVAILABLE'
-                WHERE item_id = ?
-            ");
-            $updateStmt->execute([$qty, $inv_id]);
+            $stockStmt->execute([
+                ':quantity' => $qty,
+                ':item_id' => $item_id
+            ]);
+
+            if ($stockStmt->rowCount() === 0) {
+                throw new Exception('Inventory item not found for stock update.');
+            }
         }
     }
 
-    if (!$has_items) {
-        throw new Exception("Add at least one valid purchase item.");
+    if ($insertedItems === 0) {
+        throw new Exception('Purchase order must contain at least one item.');
     }
 
-    $conn->commit();
-    header("Location: index.php");
+    $pdo->commit();
+
+    header("Location: " . url('purchase_orders', null, [
+        'success' => 'Purchase order created successfully.'
+    ]));
     exit();
 
 } catch (Exception $e) {
-    $conn->rollBack();
-    header("Location: create.php?error=" . urlencode($e->getMessage()));
+
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    error_log("Purchase Order Store Error: " . $e->getMessage());
+
+    header("Location: " . url('purchase_orders', 'create', [
+        'error' => 'Failed to create purchase order.'
+    ]));
     exit();
 }

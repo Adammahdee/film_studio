@@ -1,10 +1,10 @@
 <?php
 use App\Core\Csrf;
+
 require_once ROOT_PATH . "src/Auth/Auth_check.php";
-require_once ROOT_PATH . "templates/includes/header.php";
 
 // Quick admin check
-$stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
+$stmt = $pdo->prepare("SELECT role FROM users WHERE user_id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 if ($user['role'] !== 'ADMIN') { die("Unauthorized"); }
@@ -14,21 +14,21 @@ $msg = "";
 // --- Handle Backup Export ---
 if (isset($_GET['action']) && $_GET['action'] === 'export') {
     $tables = [];
-    $result = $conn->query("SHOW TABLES");
+    $result = $pdo->query("SHOW TABLES");
     while ($row = $result->fetch(PDO::FETCH_NUM)) { $tables[] = $row[0]; }
 
     $sqlScript = "-- Film Studio Backup\n\n";
     foreach ($tables as $table) {
-        $stmt = $conn->query("SHOW CREATE TABLE $table");
+        $stmt = $pdo->query("SHOW CREATE TABLE $table");
         $row = $stmt->fetch(PDO::FETCH_NUM);
         $sqlScript .= "\n\nDROP TABLE IF EXISTS `$table`;\n";
         $sqlScript .= $row[1] . ";\n\n";
 
-        $stmt = $conn->query("SELECT * FROM $table");
+        $stmt = $pdo->query("SELECT * FROM $table");
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $keys = array_keys($row);
             $values = array_values($row);
-            $vals = array_map(function($v) use ($conn) { return $v === null ? "NULL" : $conn->quote($v); }, $values);
+            $vals = array_map(function($v) use ($pdo) { return $v === null ? "NULL" : $pdo->quote($v); }, $values);
             $sqlScript .= "INSERT INTO $table (" . implode(", ", $keys) . ") VALUES (" . implode(", ", $vals) . ");\n";
         }
     }
@@ -52,8 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
             $sql = file_get_contents($_FILES['backup_file']['tmp_name']);
             
             // Ensure the connection handles multi-statements correctly
-            $conn->setAttribute(PDO::ATTR_EMULATE_PREPARES, 1);
-            $conn->exec($sql);
+            $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, 1);
+            $pdo->exec($sql);
             $msg = '<div class="alert alert-success">Database restored successfully!</div>';
         } catch (Exception $e) {
             $msg = '<div class="alert alert-danger">Restore failed: ' . htmlspecialchars($e->getMessage()) . '</div>';
@@ -94,10 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
                 </div>
             </div>
             <div class="card-footer text-center">
-                <a href="settings.php" class="btn btn-link">Back to Settings</a>
+                <a href="<?= url('settings') ?>" class="btn btn-link">Back to Settings</a>
             </div>
         </div>
     </div>
 </div>
-
-<?php require_once ROOT_PATH . "templates/includes/footer.php"; ?>

@@ -1,98 +1,151 @@
 <?php
-require_once __DIR__ . "/includes/auth_check.php";
-require_once __DIR__ . "/config/db.php";
 
-// Quick admin check
-$stmt = $conn->prepare("SELECT role FROM users WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch();
-if ($user['role'] !== 'ADMIN') { die("Unauthorized"); }
+use App\Core\Csrf;
+use App\Core\ErrorHandler;
 
-$msg = "";
+// Role check (ADMIN only)
+$role = $_SESSION['role'] ?? null;
 
-// --- Handle Backup Export ---
-if (isset($_GET['action']) && $_GET['action'] === 'export') {
-    $tables = [];
-    $result = $conn->query("SHOW TABLES");
-    while ($row = $result->fetch(PDO::FETCH_NUM)) { $tables[] = $row[0]; }
-
-    $sqlScript = "-- Film Studio Backup\n\n";
-    foreach ($tables as $table) {
-        $stmt = $conn->query("SHOW CREATE TABLE $table");
-        $row = $stmt->fetch(PDO::FETCH_NUM);
-        $sqlScript .= "\n\nDROP TABLE IF EXISTS `$table`;\n";
-        $sqlScript .= $row[1] . ";\n\n";
-
-        $stmt = $conn->query("SELECT * FROM $table");
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $keys = array_keys($row);
-            $values = array_values($row);
-            $vals = array_map(function($v) use ($conn) { return $v === null ? "NULL" : $conn->quote($v); }, $values);
-            $sqlScript .= "INSERT INTO $table (" . implode(", ", $keys) . ") VALUES (" . implode(", ", $vals) . ");\n";
-        }
-    }
-
-    // Prepend foreign key check disables to ensure smooth restoration
-    $sqlScript = "SET FOREIGN_KEY_CHECKS = 0;\n" . $sqlScript . "\nSET FOREIGN_KEY_CHECKS = 1;";
-
-    header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="backup_' . date('Y-m-d_H-i-s') . '.sql"');
-    echo $sqlScript;
+if ($role !== 'ADMIN') {
+    ErrorHandler::render403();
     exit();
 }
 
-// --- Handle Restore Import ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
+$msg = "";
+
+/**
+ * EXPORT DATABASE
+ */
+if (isset($_GET['action']) && $_GET['action'] === 'export') {
+
     try {
-        $sql = file_get_contents($_FILES['backup_file']['tmp_name']);
-        
-        // Ensure the connection handles multi-statements correctly
-        $conn->setAttribute(PDO::ATTR_EMULATE_PREPARES, 1);
-        $conn->exec($sql);
-        $msg = '<div class="alert alert-success">Database restored successfully!</div>';
-    } catch (Exception $e) {
-        $msg = '<div class="alert alert-danger">Restore failed: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        $tables = [];
+        $result = $pdo->query("SHOW TABLES");
+
+        while ($row = $result->fetch(PDO::FETCH_NUM)) {
+            $tables[] = $row[0];
+        }
+
+        $sql = "-- System Backup Export\n\n";
+
+        foreach ($tables as $table) {
+
+            $create = $pdo->query("SHOW CREATE TABLE `$table`")->fetch(PDO::FETCH_NUM);
+            $sql .= "\nDROP TABLE IF EXISTS `$table`;\n";
+            $sql .= $create[1] . ";\n\n";
+
+            $data = $pdo->query("SELECT * FROM `$table`");
+
+            while ($row = $data->fetch(PDO::FETCH_ASSOC)) {
+
+                $keys = array_keys($row);
+                $vals = array_map(fn($v) =>
+                    $v === null ? "NULL" : $pdo->quote($v),
+                    array_values($row)
+                );
+
+                $sql .= "INSERT INTO `$table` (" . implode(",", $keys) . ")
+                         VALUES (" . implode(",", $vals) . ");\n";
+            }
+        }
+
+        $sql = "SET FOREIGN_KEY_CHECKS=0;\n" . $sql . "\nSET FOREIGN_KEY_CHECKS=1;";
+
+        header('Content-Type: application/sql');
+        header('Content-Disposition: attachment; filename=backup_' . date('Y-m-d_H-i-s') . '.sql');
+
+        echo $sql;
+        exit();
+
+    } catch (PDOException $e) {
+        error_log("Backup export failed: " . $e->getMessage());
+        $msg = "Backup export failed.";
     }
 }
 
-require_once __DIR__ . "/includes/header.php";
+/**
+ * RESTORE DATABASE
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
+
+    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
+        ErrorHandler::render403();
+        exit();
+    }
+
+    try {
+        $sql = file_get_contents($_FILES['backup_file']['tmp_name']);
+
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
+        $pdo->exec($sql);
+
+        $msg = "Database restored successfully.";
+
+    } catch (Exception $e) {
+        error_log("Restore failed: " . $e->getMessage());
+        $msg = "Restore operation failed.";
+    }
+}
 ?>
 
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-warning">
-                <h5 class="card-title mb-0">Backup & Restore</h5>
-            </div>
-            <div class="card-body">
-                <?= $msg ?>
-                
-                <div class="mb-4">
-                    <h6>Export Data</h6>
-                    <p class="text-muted small">Download a full SQL dump of your current database.</p>
-                    <a href="?action=export" class="btn btn-success w-100">Download Backup (.sql)</a>
+<!-- VIEW ONLY -->
+<div class="container py-4">
+
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+
+            <div class="card shadow-sm">
+
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Backup & Restore</h5>
                 </div>
-                
-                <hr>
-                
-                <div class="mt-4">
-                    <h6>Restore Data</h6>
-                    <p class="text-muted small text-danger">Warning: This will overwrite current data if tables already exist.</p>
-                    <form method="POST" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <input type="file" name="backup_file" class="form-control" accept=".sql" required>
+
+                <div class="card-body">
+
+                    <?php if ($msg): ?>
+                        <div class="alert alert-info">
+                            <?= htmlspecialchars($msg) ?>
                         </div>
-                        <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Are you sure? This may overwrite existing data.')">
-                            Upload and Restore
-                        </button>
-                    </form>
+                    <?php endif; ?>
+
+                    <div class="mb-4">
+                        <h6>Export Database</h6>
+                        <a href="?action=export" class="btn btn-success w-100">
+                            Download Backup
+                        </a>
+                    </div>
+
+                    <hr>
+
+                    <div>
+                        <h6>Restore Database</h6>
+
+                        <form method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="<?= Csrf::generateToken() ?>">
+
+                            <input type="file" name="backup_file"
+                                   class="form-control mb-3"
+                                   accept=".sql"
+                                   required>
+
+                            <button type="submit"
+                                    class="btn btn-danger w-100"
+                                    onclick="return confirm('This will overwrite data. Continue?')">
+                                Restore Backup
+                            </button>
+                        </form>
+
+                    </div>
+
                 </div>
+
+                <div class="card-footer text-center">
+                    <a href="<?= url('settings') ?>">Back to Settings</a>
+                </div>
+
             </div>
-            <div class="card-footer text-center">
-                <a href="<?= url('settings') ?>" class="btn btn-link">Back to Settings</a>
-            </div>
+
         </div>
     </div>
-</div>
 
-<?php require_once __DIR__ . "/includes/footer.php"; ?>
+</div>

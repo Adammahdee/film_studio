@@ -1,103 +1,179 @@
 <?php
 /**
- * Centralized Dashboard Controller
+ * Centralized Dashboard Controller View
+ * Location: templates/dashboard/index.php
  */
-use App\Auth\Permissions;
-require_once ROOT_PATH . 'src/Auth/auth_check.php';
-require_once ROOT_PATH . 'templates/includes/header.php';
 
-/* --- Fetch Dashboard Statistics --- */
-$role = $_SESSION['role'] ?? '';
-$isAdmin = in_array($role, ['ADMIN', 'MANAGER']);
+use App\Security\Session;
 
-// Initialize stats to prevent undefined variable diagnostics for non-admin users
+// Ensure secure session handling
+Session::start();
+
+// User context
+$role = $_SESSION['role'] ?? 'STAFF';
+$isAdmin = in_array($role, ['ADMIN', 'MANAGER'], true);
+
+// Default dashboard statistics
 $stats = [
     'total_items'      => 0,
     'pending_requests' => 0,
     'low_stock'        => 0
 ];
 
-if (Permissions::isAtLeast($role, 'MANAGER')) { // Use permission helper
-    $stats = [
-        'total_items'      => (int) $conn->query("SELECT COUNT(*) FROM inventory")->fetchColumn(),
-        'pending_requests' => (int) $conn->query("SELECT COUNT(*) FROM requests WHERE status = 'PENDING'")->fetchColumn(),
-        'low_stock'        => (int) $conn->query("SELECT COUNT(*) FROM inventory WHERE quantity <= 5")->fetchColumn()
-    ];
+// Fetch dashboard statistics safely
+if ($isAdmin) {
+    try {
+        $stats['total_items'] = (int) $pdo
+            ->query("SELECT COUNT(*) FROM inventory")
+            ->fetchColumn();
+
+        $stats['pending_requests'] = (int) $pdo
+            ->query("SELECT COUNT(*) FROM purchase_orders WHERE status = 'PENDING'")
+            ->fetchColumn();
+
+        $stats['low_stock'] = (int) $pdo
+            ->query("SELECT COUNT(*) FROM inventory WHERE quantity <= 5")
+            ->fetchColumn();
+
+    } catch (\Exception $e) {
+        error_log('Dashboard Statistics Error: ' . $e->getMessage());
+    }
 }
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="mb-1">Studio Overview</h2>
-        <p class="text-muted">Welcome back, <?= htmlspecialchars($_SESSION['role']) ?>.</p>
+        <p class="text-muted mb-0">
+            Welcome back, <?= htmlspecialchars($role) ?>.
+        </p>
     </div>
-    <?php if (Permissions::hasPermission($role, 'manage_inventory')): ?>
+
+    <?php if ($isAdmin): ?>
         <div class="d-flex gap-2">
-            <a href="<?= url('inventory', 'add') ?>" class="btn btn-success">Add Item</a>
-            <a href="<?= url('purchase_orders', 'create') ?>" class="btn btn-primary">New PO</a> <!-- Assuming this requires manage_suppliers or receive_goods -->
+            <a href="<?= url('inventory') ?>" class="btn btn-success">
+                Add Item
+            </a>
+
+            <a href="<?= url('procurement') ?>" class="btn btn-primary">
+                New PO
+            </a>
         </div>
     <?php endif; ?>
 </div>
 
 <?php if ($isAdmin): ?>
 <div class="row g-3 mb-4">
+
     <div class="col-md-4">
-        <div class="card shadow-sm border-0 bg-primary text-white">
+        <div class="card border-0 shadow-sm bg-primary text-white">
             <div class="card-body">
                 <div class="small opacity-75">Inventory Items</div>
-                <div class="fs-2 fw-bold"><?= $stats['total_items'] ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 bg-warning text-dark">
-            <div class="card-body">
-                <div class="small opacity-75">Pending Requests</div>
-                <div class="fs-2 fw-bold"><?= $stats['pending_requests'] ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 bg-danger text-white">
-            <div class="card-body">
-                <div class="small opacity-75">Low Stock Alert</div>
-                <div class="fs-2 fw-bold"><?= $stats['low_stock'] ?></div>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<div class="row g-4">
-    <div class="col-md-8">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-white py-3">Quick Navigation</div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    <a href="<?= url('inventory') ?>" class="list-group-item list-group-item-action py-3">Manage Inventory Gear</a>
-                    <a href="<?= url('requests') ?>" class="list-group-item list-group-item-action py-3">View Procurement Requests</a>
-                    <a href="<?= url('suppliers') ?>" class="list-group-item list-group-item-action py-3">Supplier Directory</a>
-                    <?php if (Permissions::hasPermission($role, 'system_settings')): ?>
-                        <a href="<?= url('settings') ?>" class="list-group-item list-group-item-action py-3 text-primary fw-bold">System Administration</a>
-                    <?php endif; ?>
+                <div class="fs-2 fw-bold">
+                    <?= $stats['total_items'] ?>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4"> <!-- This section is for all logged-in users -->
-        <div class="card shadow-sm">
-            <div class="card-header bg-white py-3">Account Information</div>
+
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm bg-warning text-dark">
             <div class="card-body">
-                <?php if (Permissions::hasPermission($role, 'manage_users')): ?>
-                    <p><strong>User Management:</strong> <a href="<?= url('users') ?>">Manage Users</a></p>
-                <?php endif; ?>
-                <p><strong>Session ID:</strong> <span class="text-muted"><?= substr(session_id(), 0, 8) ?>...</span></p>
-                <p><strong>Authorization:</strong> <span class="badge bg-dark"><?= $role ?></span></p>
-                <hr>
-                <a href="<?= url('auth', 'logout') ?>" class="btn btn-outline-danger w-100">Sign Out</a>
+                <div class="small opacity-75">Pending Orders</div>
+                <div class="fs-2 fw-bold">
+                    <?= $stats['pending_requests'] ?>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<?php require_once ROOT_PATH . 'templates/includes/footer.php'; ?>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm bg-danger text-white">
+            <div class="card-body">
+                <div class="small opacity-75">Low Stock Alerts</div>
+                <div class="fs-2 fw-bold">
+                    <?= $stats['low_stock'] ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+<?php endif; ?>
+
+<div class="row g-4">
+
+    <div class="col-md-8">
+        <div class="card shadow-sm h-100">
+
+            <div class="card-header bg-white py-3">
+                <strong>Quick Navigation Modules</strong>
+            </div>
+
+            <div class="card-body">
+
+                <div class="list-group list-group-flush">
+
+                    <a href="<?= url('inventory') ?>"
+                       class="list-group-item list-group-item-action py-3">
+                        📦 Manage Inventory Gear & Assets
+                    </a>
+
+                    <a href="<?= url('procurement') ?>"
+                       class="list-group-item list-group-item-action py-3">
+                        📑 View Procurement Requests & Purchase Orders
+                    </a>
+
+                    <a href="<?= url('suppliers') ?>"
+                       class="list-group-item list-group-item-action py-3">
+                        👥 Supplier Directory
+                    </a>
+
+                    <a href="<?= url('reports') ?>"
+                       class="list-group-item list-group-item-action py-3">
+                        📊 Reports & Analytics
+                    </a>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm">
+
+            <div class="card-header bg-white py-3">
+                <strong>Account Information</strong>
+            </div>
+
+            <div class="card-body">
+
+                <p>
+                    <strong>Session Signature:</strong>
+                    <code class="text-dark">
+                        <?= htmlspecialchars(substr(session_id(), 0, 8)) ?>...
+                    </code>
+                </p>
+
+                <p>
+                    <strong>Clearance Rank:</strong>
+                    <span class="badge bg-dark">
+                        <?= htmlspecialchars($role) ?>
+                    </span>
+                </p>
+
+                <hr>
+
+                <a href="<?= url('auth', 'logout') ?>"
+                   class="btn btn-outline-danger w-100">
+                    Sign Out Safely
+                </a>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>

@@ -1,9 +1,11 @@
 <?php
 // Session is handled by public/index.php
-// Ensure auth check is run
 require_once ROOT_PATH . "src/Auth/Auth_check.php";
-// Load settings
 require_once ROOT_PATH . "templates/includes/settings_loader.php";
+
+// SAFE FALLBACKS (fix undefined variables)
+$site_name = $site_name ?? 'Film Studio';
+$studio_logo = $studio_logo ?? null;
 
 ?>
 <!DOCTYPE html>
@@ -11,18 +13,13 @@ require_once ROOT_PATH . "templates/includes/settings_loader.php";
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($site_name ?? 'Film Studio') ?> System</title>
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .app-shell {
-            min-height: 100vh;
-        }
+    <title><?= htmlspecialchars($site_name) ?> System</title>
 
-        .app-sidebar {
-            width: 260px;
-            background: #1f2937;
-        }
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        .app-shell { min-height: 100vh; }
+        .app-sidebar { width: 260px; background: #1f2937; }
 
         .app-sidebar .nav-link {
             color: rgba(255, 255, 255, 0.78);
@@ -36,32 +33,38 @@ require_once ROOT_PATH . "templates/includes/settings_loader.php";
             color: #fff;
         }
 
-        .app-content {
-            min-width: 0;
-        }
+        .app-content { min-width: 0; }
 
         @media (max-width: 767.98px) {
-            .app-shell {
-                display: block !important;
-            }
-
-            .app-sidebar {
-                width: 100%;
-            }
+            .app-shell { display: block !important; }
+            .app-sidebar { width: 100%; }
         }
     </style>
 </head>
+
 <body class="bg-light">
 <div class="app-shell d-flex">
+
   <aside class="app-sidebar text-white p-3 p-md-4 shadow-sm">
+
     <div class="d-flex align-items-center justify-content-between mb-4">
-      <a class="fs-5 fw-semibold text-white text-decoration-none d-flex align-items-center" href="/index.php?page=dashboard">
+
+      <a class="fs-5 fw-semibold text-white text-decoration-none d-flex align-items-center"
+         href="/index.php?page=dashboard">
+
         <?php if (!empty($studio_logo)): ?>
-          <img src="<?= htmlspecialchars($studio_logo) ?>" alt="Logo" class="me-2" style="height: 24px; width: auto; object-fit: contain;">
+          <img src="<?= htmlspecialchars($studio_logo) ?>"
+               alt="Logo"
+               class="me-2"
+               style="height: 24px; width: auto; object-fit: contain;">
         <?php endif; ?>
+
         <?= htmlspecialchars($site_name) ?>
       </a>
-      <span class="badge bg-secondary"><?= htmlspecialchars($_SESSION['role'] ?? '') ?></span>
+
+      <span class="badge bg-secondary">
+        <?= htmlspecialchars($_SESSION['role'] ?? '') ?>
+      </span>
     </div>
 
     <nav class="nav flex-column gap-1">
@@ -99,6 +102,7 @@ require_once ROOT_PATH . "templates/includes/settings_loader.php";
       <a href="<?= url('profile') ?>" class="nav-link px-0 text-white-50">Profile</a>
       <a href="<?= url('auth', 'logout') ?>" class="btn btn-outline-light btn-sm w-100 mt-2">Logout</a>
     </div>
+
   </aside>
 
   <main class="app-content flex-grow-1 p-3 p-md-4">

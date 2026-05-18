@@ -1,45 +1,84 @@
 <?php
+
 use App\Core\Csrf;
 use App\Core\DatabaseTransaction;
 use App\Core\ErrorHandler;
-use App\Services\AuditLogger;
-require_once ROOT_PATH . "src/Auth/auth_check.php";
-require_once ROOT_PATH . 'config/db.php';
+use App\Core\AuditLogger;
 
-if ($_SESSION['role'] != 'ADMIN' && $_SESSION['role'] != 'MANAGER') {
-    die("Access denied");
-}
-// This will be replaced by Permissions::hasPermission later
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
-        // For now, just die. Later, use ErrorHandler::render403()
-        die("Invalid CSRF token. Please try again.");
-    }
-    $id = $_POST['id'] ?? 0;
-
-    if ($id) {
-        try {
-            DatabaseTransaction::begin();
-            $itemToDelete = $conn->prepare("SELECT item_name FROM inventory WHERE item_id = ?"); // Fetch for logging
-            $itemToDelete->execute([$id]);
-            $oldItem = $itemToDelete->fetch(PDO::FETCH_ASSOC);
-            $stmt = $conn->prepare("DELETE FROM inventory WHERE item_id = ?");
-            $stmt->execute([$id]);
-            AuditLogger::log('DELETE', 'Inventory', $id, $oldItem);
-            DatabaseTransaction::commit();
-        } catch (PDOException $e) {
-            DatabaseTransaction::rollback();
-            // Catch foreign key constraint violation (SQLSTATE 23000)
-            if ($e->getCode() == '23000') {
-                // For now, just die. Later, use ErrorHandler::render500() or a custom error page with a user-friendly message
-                ErrorHandler::render500("Cannot delete item. It is referenced in existing Requests or Purchase Orders.", $e);
-            }
-            // Rethrow other errors
-            die("Database Error: " . htmlspecialchars($e->getMessage()));
-        }
-    }
+// Role guard
+$role = $_SESSION['role'] ?? '';
+if ($role !== 'ADMIN' && $role !== 'MANAGER') {
+    ErrorHandler::render403();
+    exit();
 }
 
-header("Location: " . url('inventory'));
-exit;
+// Enforce POST only
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: " . url('inventory'));
+    exit();
+}
+
+// CSRF check
+if (!Csrf::validateToken($_POST['csrf_token'] ?? '')) {
+    error_log("CSRF failure on inventory delete. IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
+    ErrorHandler::render403();
+    exit();
+}
+
+$id = (int)($_POST['id'] ?? 0);
+
+if ($id <= 0) {
+    $_SESSION['errors'] = "Invalid inventory item.";
+    header("Location: " . url('inventory'));
+    exit();
+}
+
+try {
+    DatabaseTransaction::begin();
+
+    // Fetch snapshot
+    $stmt = $pdo->prepare("SELECT name FROM inventory WHERE item_id = ?");
+    $stmt->execute([$id]);
+    $item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$item) {
+        DatabaseTransaction::rollback();
+        $_SESSION['errors'] = "Item not found.";
+        header("Location: " . url('inventory'));
+        exit();
+    }
+
+    // Delete record
+    $delete = $pdo->prepare("DELETE FROM inventory WHERE item_id = ?");
+    $delete->execute([$id]);
+
+    // Audit log
+    AuditLogger::log(
+        'DELETE_INVENTORY',
+        'inventory',
+        $id,
+        $item,
+        null
+    );
+
+    DatabaseTransaction::commit();
+
+    $_SESSION['success_msg'] = "Inventory item deleted successfully.";
+    header("Location: " . url('inventory'));
+    exit();
+
+} catch (PDOException $e) {
+
+    DatabaseTransaction::rollback();
+
+    error_log("Inventory delete failed: " . $e->getMessage());
+
+    if ($e->getCode() === '23000') {
+        $_SESSION['errors'] = "Cannot delete item due to linked records.";
+        header("Location: " . url('inventory'));
+        exit();
+    }
+
+    ErrorHandler::render500("Database error occurred.", $e);
+    exit();
+}

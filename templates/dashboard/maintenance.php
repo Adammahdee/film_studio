@@ -1,38 +1,70 @@
 <?php
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once __DIR__ . "/../../includes/settings_loader.php";
 
-// If maintenance mode is off, or user is admin, redirect back to index
-if (!$maintenance_mode || (isset($_SESSION['role']) && $_SESSION['role'] === 'ADMIN')) {
-    header("Location: /index.php");
+use App\Core\ErrorHandler;
+
+// Role + auth guard
+$role = $_SESSION['role'] ?? null;
+
+if (!isset($_SESSION['user_id']) || ($role !== 'ADMIN' && $role !== 'MANAGER')) {
+    header("Location: " . url('auth'));
     exit();
 }
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Mode - <?= htmlspecialchars($site_name) ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #f4f7fb; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .maintenance-card { max-width: 500px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="card shadow-sm maintenance-card p-5">
-        <div class="mb-4">
-            <h1 class="display-1">🛠️</h1>
-        </div>
-        <h2 class="mb-3">Under Maintenance</h2>
-        <p class="text-muted mb-4">
-            <?= htmlspecialchars($site_name) ?> is currently undergoing scheduled maintenance. 
-            We'll be back online shortly. Thank you for your patience!
-        </p>
-        <a href="/index.php?page=auth" class="btn btn-outline-primary">Admin Login</a>
-    </div>
-</body>
-</html>
+
+// Load DB config (should ideally be injected via bootstrap later)
+require_once ROOT_PATH . "/config/db.php";
+
+$successMessage = '';
+$errorMessage = '';
+$logs = [];
+
+try {
+
+    // Default maintenance logs fetch
+    $stmt = $pdo->query("
+        SELECT log_id, user_id, action, details, created_at
+        FROM audit_logs
+        ORDER BY log_id DESC
+        LIMIT 20
+    ");
+
+    $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Handle POST actions (maintenance commands)
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+        $action = $_POST['action'] ?? null;
+
+        if ($action === 'clear_old_logs') {
+
+            $delete = $pdo->prepare("
+                DELETE FROM audit_logs
+                WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+            ");
+
+            $delete->execute();
+
+            $successMessage = "Old logs cleared successfully.";
+
+            // refresh logs
+            $stmt = $pdo->query("
+                SELECT log_id, user_id, action, details, created_at
+                FROM audit_logs
+                ORDER BY log_id DESC
+                LIMIT 20
+            ");
+
+            $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+
+} catch (PDOException $e) {
+    error_log("Maintenance module error: " . $e->getMessage());
+    $errorMessage = "System maintenance error occurred.";
+}
+
+// View layer only
+require_once ROOT_PATH . "/templates/dashboard/maintenance.php";

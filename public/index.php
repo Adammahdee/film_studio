@@ -1,163 +1,310 @@
 <?php
 declare(strict_types=1);
 
-// --- REDIRECT LOOP DETECTOR BLOCK ---
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
-// Track how many times this entry point has been hit in this session sequence
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Time-sensitive loop detection: Reset counter if more than 2 seconds since last hit.
-// This distinguishes between an automated redirect loop and normal user navigation.
-$now = time();
-$lastHit = $_SESSION['last_redirect_time'] ?? 0;
-if ($now - $lastHit > 2) {
-    $_SESSION['redirect_hop_count'] = 0;
-}
-$_SESSION['last_redirect_time'] = $now;
-$_SESSION['redirect_hop_count'] = ($_SESSION['redirect_hop_count'] ?? 0) + 1;
-
-// Increase limit to 6 to allow for complex legitimate redirect chains (e.g. root -> gateway -> auth -> dashboard)
-if ($_SESSION['redirect_hop_count'] > 6) {
-    $_SESSION['redirect_hop_count'] = 0; // Reset counter for next test
-    
-    echo "<div style='font-family:sans-serif; padding:20px; border:3px solid #ff4d4d; background:#fff2f2; border-radius:8px;'>";
-    echo "<h1 style='color:#cc0000; margin-top:0;'>🛑 Redirect Loop Halted by Security Guard</h1>";
-    echo "<p>Your application tried to redirect too many times in a row.</p>";
-    echo "<h3>Current Routing Properties:</h3>";
-    echo "<ul>";
-    echo "<li><strong>Target Page Parameter (\$page):</strong> <code>" . htmlspecialchars($_GET['page'] ?? 'dashboard') . "</code></li>";
-    echo "<li><strong>Full Request URI:</strong> <code>" . htmlspecialchars($_SERVER['REQUEST_URI']) . "</code></li>";
-    echo "<li><strong>User ID Session Status:</strong> " . (isset($_SESSION['user_id']) ? "Logged In (ID: ".$_SESSION['user_id'].")" : "Not Logged In") . "</li>";
-    echo "</ul>";
-    
-    echo "<h3>Execution Trace (Files compiled before the crash):</h3>";
-    echo "<pre style='background:#dfdfdf; padding:15px; border-radius:4px; overflow-x:auto;'>";
-    foreach (get_included_files() as $index => $file) {
-        echo "[" . ($index + 1) . "] $file\n";
-    }
-    echo "</pre>";
-    echo "</div>";
-    exit();
-}
-// --- END DETECTOR BLOCK ---
-
 /**
  * FILM STUDIO PROCUREMENT & INVENTORY MANAGEMENT SYSTEM
- * Main Application Entry Point (Front Controller Gateway)
+ * Front Controller Gateway
  */
 
-// Define the absolute base path of the project root directory
-if (!defined('ROOT_PATH')) {
-    define('ROOT_PATH', dirname(__DIR__) . DIRECTORY_SEPARATOR);
-}
+// ---------------------------------------------------
+// 1. ROOT PATH + AUTOLOADER
+// ---------------------------------------------------
 
-// 1. Setup Autoloading
-if (file_exists(ROOT_PATH . 'vendor/autoload.php')) {
-    require_once ROOT_PATH . 'vendor/autoload.php';
-}
+define('ROOT_PATH', dirname(__DIR__) . DIRECTORY_SEPARATOR);
 
-// 1.5 Load Helper Functions (Required for URL routing and auth checks)
+require_once ROOT_PATH . 'vendor/autoload.php';
+require_once ROOT_PATH . 'config/db.php';
 require_once ROOT_PATH . 'templates/includes/functions.php';
 
-// 2. Load Global Database Configurations
-require_once ROOT_PATH . 'config/db.php';
+use App\Security\Session;
+use App\Core\DatabaseTransaction;
+use App\Core\AuditLogger;
 
-// 2.5 Database Connection Health Check
-try {
-    if (!isset($conn) || !($conn instanceof PDO)) {
-        throw new Exception("Database connection variable (\$conn) is missing or invalid.");
-    }
-    // Perform a lightweight query to verify the connection is alive
-    $conn->query("SELECT 1");
-} catch (Exception $e) {
-    http_response_code(500);
-    die("<h1>System Unavailable</h1><p>We are experiencing technical difficulties connecting to the database. Please try again later.</p><!-- Debug Error: " . htmlspecialchars($e->getMessage()) . " -->");
+// ---------------------------------------------------
+// 2. START SECURE SESSION
+// ---------------------------------------------------
+
+Session::start();
+DatabaseTransaction::setConnection($pdo);
+AuditLogger::setConnection($pdo);
+
+// ---------------------------------------------------
+// 3. ROUTING PARAMETERS
+// ---------------------------------------------------
+
+$page = $_GET['page'] ?? 'dashboard';
+$action = $_GET['action'] ?? null;
+
+// ---------------------------------------------------
+// 4. PUBLIC ROUTES
+// ---------------------------------------------------
+
+$publicPages = ['auth', 'login'];
+
+// ---------------------------------------------------
+// 5. AUTHENTICATION GUARD
+// ---------------------------------------------------
+
+if (
+    !in_array($page, $publicPages) &&
+    !isset($_SESSION['user_id'])
+) {
+    header('Location: ' . url('auth'));
+    exit();
 }
 
-// 3. Simple URL Router
-$page = $_GET['page'] ?? 'dashboard';
+// ---------------------------------------------------
+// 6. LOAD GLOBAL HEADER
+// ---------------------------------------------------
+
+require_once ROOT_PATH . 'templates/includes/header.php';
+
+// ---------------------------------------------------
+// 7. ROUTER SWITCH
+// ---------------------------------------------------
 
 switch ($page) {
+
+    // -----------------------------------------------
+    // AUTH
+    // -----------------------------------------------
+
     case 'auth':
-        require_once ROOT_PATH . 'templates/auth/index.php'; 
+    case 'login':
+        require_once ROOT_PATH . 'templates/auth/index.php';
         break;
-        
+
+    // -----------------------------------------------
+    // DASHBOARD
+    // -----------------------------------------------
+
+    case 'dashboard':
+        require_once ROOT_PATH . 'templates/dashboard/index.php';
+        break;
+
+    // -----------------------------------------------
+    // INVENTORY
+    // -----------------------------------------------
+
     case 'inventory':
-        require_once ROOT_PATH . 'templates/inventory/index.php';
+
+        switch ($action) {
+
+            case 'add':
+                require_once ROOT_PATH . 'templates/inventory/add_item.php';
+                break;
+
+            case 'edit':
+                require_once ROOT_PATH . 'templates/inventory/edit_item.php';
+                break;
+
+            case 'delete':
+                require_once ROOT_PATH . 'templates/inventory/delete_item.php';
+                break;
+
+            default:
+                require_once ROOT_PATH . 'templates/inventory/index.php';
+                break;
+        }
+
         break;
-        
-    case 'landing':
-        require_once ROOT_PATH . 'templates/landing/index.php';
+
+    // -----------------------------------------------
+    // PURCHASE ORDERS
+    // -----------------------------------------------
+
+    case 'purchase_orders':
+    case 'procurement':
+
+        switch ($action) {
+
+            case 'create':
+                require_once ROOT_PATH . 'templates/purchase_orders/create.php';
+                break;
+
+            case 'store':
+                require_once ROOT_PATH . 'templates/purchase_orders/store.php';
+                break;
+
+            case 'view':
+                require_once ROOT_PATH . 'templates/purchase_orders/view.php';
+                break;
+
+            case 'receive':
+                require_once ROOT_PATH . 'templates/purchase_orders/receive.php';
+                break;
+
+            default:
+                require_once ROOT_PATH . 'templates/purchase_orders/index.php';
+                break;
+        }
+
         break;
+
+    // -----------------------------------------------
+    // REQUESTS
+    // -----------------------------------------------
 
     case 'requests':
-        $action = $_GET['action'] ?? 'index';
-        if ($action === 'create') {
-            require_once ROOT_PATH . 'templates/requests/create.php';
-        } elseif ($action === 'approve') {
-            require_once ROOT_PATH . 'templates/requests/approve.php';
-        } elseif ($action === 'my_requests') {
-            require_once ROOT_PATH . 'templates/requests/my_requests.php';
-        } elseif ($action === 'store') {
-            require_once ROOT_PATH . 'templates/requests/store.php';
-        } else {
-            require_once ROOT_PATH . 'templates/requests/index.php';
+
+        switch ($action) {
+
+            case 'create':
+                require_once ROOT_PATH . 'templates/requests/create.php';
+                break;
+
+            case 'store':
+                require_once ROOT_PATH . 'templates/requests/store.php';
+                break;
+
+            case 'approve':
+                require_once ROOT_PATH . 'templates/requests/approve.php';
+                break;
+
+            case 'process':
+                require_once ROOT_PATH . 'templates/requests/approve.php';
+                break;
+
+            case 'my_requests':
+                require_once ROOT_PATH . 'templates/requests/my_requests.php';
+                break;
+
+            default:
+                require_once ROOT_PATH . 'templates/requests/index.php';
+                break;
         }
+
         break;
+
+    // -----------------------------------------------
+    // SUPPLIERS
+    // -----------------------------------------------
 
     case 'suppliers':
-        $action = $_GET['action'] ?? 'index';
-        if ($action === 'edit') {
-            require_once ROOT_PATH . 'templates/suppliers/edit.php';
-        } else {
-            require_once ROOT_PATH . 'templates/suppliers/index.php';
+
+        switch ($action) {
+
+            case 'create':
+                require_once ROOT_PATH . 'templates/suppliers/create.php';
+                break;
+
+            case 'edit':
+                require_once ROOT_PATH . 'templates/suppliers/edit.php';
+                break;
+
+            case 'delete':
+                require_once ROOT_PATH . 'templates/suppliers/delete.php';
+                break;
+
+            default:
+                require_once ROOT_PATH . 'templates/suppliers/index.php';
+                break;
         }
+
         break;
 
+    // -----------------------------------------------
+    // USERS
+    // -----------------------------------------------
+
+    case 'users':
+
+        switch ($action) {
+
+            case 'create':
+            case null:
+                require_once ROOT_PATH . 'templates/users/create.php';
+                break;
+
+            default:
+                http_response_code(404);
+                require_once ROOT_PATH . 'templates/errors/404.php';
+                break;
+        }
+
+        break;
+
+    // -----------------------------------------------
+    // REPORTS
+    // -----------------------------------------------
+
+    case 'reports':
+
+    $stmt = $pdo->query("
+        SELECT 
+            COUNT(*) AS total,
+            SUM(status = 'APPROVED') AS approved,
+            SUM(status = 'PENDING') AS pending,
+            SUM(status = 'REJECTED') AS rejected
+        FROM requests
+    ");
+
+    $viewData['requestMetrics'] = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
+        'total' => 0,
+        'approved' => 0,
+        'pending' => 0,
+        'rejected' => 0
+    ];
+
+    require ROOT_PATH . 'templates/reports/index.php';
+    break;
+
+    // -----------------------------------------------
+    // PROFILE
+    // -----------------------------------------------
+
+    case 'profile':
+        require_once ROOT_PATH . 'templates/dashboard/profile.php';
+        break;
+
+    // -----------------------------------------------
+    // SETTINGS
+    // -----------------------------------------------
+
     case 'settings':
-        // FIX: Pointing to the new template migration directory
         require_once ROOT_PATH . 'templates/dashboard/settings.php';
         break;
+
+    // -----------------------------------------------
+    // BACKUP
+    // -----------------------------------------------
 
     case 'backup':
         require_once ROOT_PATH . 'templates/admin/backup.php';
         break;
 
+    // -----------------------------------------------
+    // MAINTENANCE
+    // -----------------------------------------------
+
     case 'maintenance':
-        require_once ROOT_PATH . 'templates/errors/maintenance.php';
+        require_once ROOT_PATH . 'templates/admin/maintenance.php';
         break;
 
-    case 'reports':
-        require_once ROOT_PATH . 'templates/reports/index.php';
-        break;
+    // -----------------------------------------------
+    // LOGOUT
+    // -----------------------------------------------
 
-    case 'profile':
-        // FIX: Pointing to the new template migration directory
-        require_once ROOT_PATH . 'templates/dashboard/profile.php';
-        break;
-// ... Existing cases (reports, profile, etc.) ...
+    case 'logout':
 
-    case 'purchase_orders':
-        // Capture the internal action parameter (defaults to listing page)
-        $action = $_GET['action'] ?? 'index';
+        session_unset();
+        session_destroy();
 
-        if ($action === 'create') {
-            require_once ROOT_PATH . 'templates/purchase_orders/create.php';
-        } elseif ($action === 'store') {
-            require_once ROOT_PATH . 'templates/purchase_orders/store.php';
-        } else {
-            // Default sub-route maps to your index/list layout view
-            require_once ROOT_PATH . 'templates/purchase_orders/index.php';
-        }
-        break;
+        header('Location: ' . url('auth'));
+        exit();
 
-    case 'dashboard':
+    // -----------------------------------------------
+    // 404
+    // -----------------------------------------------
+
     default:
-        require_once ROOT_PATH . 'templates/dashboard/index.php';
+        http_response_code(404);
+        require_once ROOT_PATH . 'templates/errors/404.php';
         break;
 }
+
+// ---------------------------------------------------
+// 8. LOAD GLOBAL FOOTER
+// ---------------------------------------------------
+
+require_once ROOT_PATH . 'templates/includes/footer.php';

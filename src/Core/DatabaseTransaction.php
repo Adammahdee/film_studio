@@ -30,7 +30,9 @@ class DatabaseTransaction
         if (!self::$pdo) {
             throw new \Exception("PDO connection not set for DatabaseTransaction.");
         }
-        self::$pdo->beginTransaction();
+        if (!self::$pdo->inTransaction()) {
+            self::$pdo->beginTransaction();
+        }
     }
 
     /**
@@ -38,7 +40,12 @@ class DatabaseTransaction
      */
     public static function commit(): void
     {
-        self::$pdo->commit();
+        if (!self::$pdo) {
+            throw new \Exception("PDO connection not set for DatabaseTransaction.");
+        }
+        if (self::$pdo->inTransaction()) {
+            self::$pdo->commit();
+        }
     }
 
     /**
@@ -46,6 +53,11 @@ class DatabaseTransaction
      */
     public static function rollback(): void
     {
-        self::$pdo->rollBack();
+        if (!self::$pdo) {
+            throw new \Exception("PDO connection not set for DatabaseTransaction.");
+        }
+        if (self::$pdo->inTransaction()) {
+            self::$pdo->rollBack();
+        }
     }
 }
